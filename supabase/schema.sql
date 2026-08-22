@@ -126,6 +126,18 @@ language sql stable security definer as $$
   select count(*)::int from presence where last_seen > now() - interval '75 seconds';
 $$;
 
+-- ── Realtime: broadcast board + activity changes to every visitor ──
+-- (hosted equivalent: Database → Replication → enable the two tables)
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'listings') then
+    alter publication supabase_realtime add table listings;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'activity') then
+    alter publication supabase_realtime add table activity;
+  end if;
+end $$;
+
 -- ── RLS ───────────────────────────────────────────────────
 alter table listings enable row level security;
 alter table clicks enable row level security;

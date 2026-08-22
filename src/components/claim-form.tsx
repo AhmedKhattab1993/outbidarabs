@@ -400,20 +400,27 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
               <span className="invisible whitespace-nowrap px-1" aria-hidden="true">
                 ${amount || "0"}
               </span>
-              <span className="absolute inset-0 flex items-baseline justify-center">
+              <span className="absolute inset-0 flex items-baseline justify-center whitespace-nowrap">
                 <span aria-hidden="true">$</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="w-full min-w-0 bg-transparent p-0 text-center font-[inherit] text-[inherit] tracking-[inherit] tabular-nums outline-none"
-                  value={amount}
-                  onChange={(e) => {
-                    touched.current = true;
-                    setAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6));
-                  }}
-                  disabled={loading}
-                />
+                <span className="relative inline-block">
+                  {/* digit-sized sizer keeps the input exactly as wide as the
+                      number, so the $ hugs the digits with no dead space */}
+                  <span className="invisible" aria-hidden="true">
+                    {amount || "0"}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="absolute inset-0 w-full bg-transparent p-0 text-center font-[inherit] text-[inherit] tracking-[inherit] tabular-nums outline-none"
+                    value={amount}
+                    onChange={(e) => {
+                      touched.current = true;
+                      setAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6));
+                    }}
+                    disabled={loading}
+                  />
+                </span>
               </span>
             </label>
             <button

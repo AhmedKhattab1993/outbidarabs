@@ -53,3 +53,8 @@ if [ "$PROD" != "1" ] && [ "$ALIAS" = "true" ]; then
   echo "re-aliasing staging.outbidarabs.lol → $URL"
   vercel alias set "$URL" staging.outbidarabs.lol
 fi
+
+if [ "$PROD" = "1" ]; then
+  echo "production deployed: $URL"
+  echo "(production deployments serve outbidarabs.lol automatically; staging alias untouched)"
+fi

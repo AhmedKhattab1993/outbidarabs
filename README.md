@@ -131,18 +131,27 @@ SDK schema requires the full object, so prefer real ids (create one via
 `POST /api/checkout`). Note: the SDK derives the HMAC key from the raw
 `whsec_…` string bytes (not the base64 payload) — the simulator matches this.
 
-### Layer 4 — Vercel preview with staging Supabase
+### Layer 4 — Vercel preview / staging
 
-Two Supabase projects, never one: `outbidarabs-staging` (seeded, sandbox Polar)
-and `outbidarabs-prod`. In Vercel settings set the staging keys as **Preview**
-env vars and prod keys as **Production** env vars. Push a branch → the preview
-URL runs the full stack exactly as production will; run the smoke checklist
-against it before promoting.
+**Staging is live at `staging.outbidarabs.lol`**: a hosted Supabase project
+(`outbidarabs-staging`, real database, empty board) + Polar sandbox — the
+full real product, money included (test cards), with data derived only from
+actions taken on the site. The Polar sandbox webhook points at
+`https://staging.outbidarabs.lol/api/webhooks/polar`.
 
-Note: Vercel Deployment Protection is on for this project — preview URLs
-redirect anonymous visitors (and webhooks) to a login. Disable (or scope) it in
-**Dashboard → Settings → Deployment Protection** when you need webhooks or
-`smoke.sh` to reach a preview.
+⚠️ **Deploy with `bash scripts/deploy.sh [prod]`, never bare `vercel deploy`** —
+the CLI uploads local `.env`/`.env.local` into the build, which would override
+the project's Preview/Production env vars (local `NEXT_PUBLIC_MOCK_MODE=true`
+and `localhost` Supabase URLs leak into the deployment). The script hides
+local env files for the deploy and restores them after.
+
+Env vars per target (Vercel → Settings → Environment Variables):
+- **Preview**: staging Supabase keys + sandbox Polar + `SITE_URL=https://staging.outbidarabs.lol`
+- **Production**: prod Supabase + prod Polar + `MOCK_MODE=false` (never set `ALLOW_MOCK_PAYMENTS`)
+
+Note: Vercel's automatic DDoS mitigation can show a "Security Checkpoint" on
+the domain after bursts of scripted traffic (smoke tests, webhooks). It's
+infra-level, auto-expires within ~an hour, and is not an app issue.
 
 ### Layer 5 — Production (`outbidarabs.lol`)
 

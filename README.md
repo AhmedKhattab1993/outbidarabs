@@ -242,7 +242,25 @@ layer 3 and documented above — the script never calls Polar.
 3. Copy the product ID into `POLAR_PRODUCT_ID`, a token into `POLAR_ACCESS_TOKEN`
 4. Add a webhook endpoint `https://yourdomain.com/api/webhooks/polar`
    subscribed to **checkout** events, copy the secret into `POLAR_WEBHOOK_SECRET`
+
+   ⚠️ **Webhook secrets are per-endpoint per-environment.** The sandbox org's
+   endpoint (→ `staging.`) and the production org's endpoint (→ apex domain)
+   each have their own `whsec_…`. Vercel **Preview/Development** keep the
+   sandbox secret; **Production** must hold the production endpoint's secret —
+   a sandbox secret there means every real payment's webhook 403s and the
+   listing never applies. Swap it with:
+
+   ```bash
+   bash scripts/set-prod-webhook-secret.sh whsec_…   # updates env + redeploys
+   ```
+
+   Also remember a webhook endpoint must exist **in the production org**
+   (no endpoint = no deliveries at all, silently).
+
 5. Set `POLAR_ENVIRONMENT=production` when live and `NEXT_PUBLIC_MOCK_MODE=false`
+   — swap `POLAR_ACCESS_TOKEN` + `POLAR_PRODUCT_ID` + `POLAR_WEBHOOK_SECRET`
+   **together** and redeploy; a mix of sandbox and production values fails
+   either at checkout creation or at webhook validation.
 
 Flow: claim form → `POST /api/checkout` (validates identity, strips tracking
 params, enforces the #1 window, fetches og:description/og:image) → Polar-hosted

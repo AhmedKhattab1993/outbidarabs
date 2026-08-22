@@ -111,8 +111,6 @@ export const dict = {
       "الفكرة مستوحاة من outbid.lol. النسخة دي مخصصة للعرب ومركزة على حسابات التواصل الاجتماعي.",
     // ── About ──
     aboutTitle: "عن المنصة",
-    footerBuiltBy: "بناه",
-    footerBroughtBy: "بتقديم من",
     footerRules: "القواعد",
     footerLiveStats: "إحصائيات مباشرة",
     inspiredBy: "مستوحاة من outbid.lol",
@@ -221,8 +219,6 @@ export const dict = {
       "The idea is inspired by outbid.lol. This edition is built for the Arab world and focused on social media accounts.",
     // ── About ──
     aboutTitle: "About",
-    footerBuiltBy: "Built by",
-    footerBroughtBy: "Brought to you by",
     footerRules: "Rules",
     footerLiveStats: "Live stats",
     inspiredBy: "Inspired by outbid.lol",

@@ -23,7 +23,7 @@ insert into listings (url, display_name, description, bid_amount, clicks, create
   ('https://contentstudio.io', 'contentstudio.io',
    'All-in-one social media management tool backed by AI.',
    3123, 442, now() - interval '55 minutes', now() - interval '55 minutes'),
-  ('https://x.com/PumpFunCoin', 'PumpFunCoin on X',
+  ('https://x.com/pumpfuncoin', '@pumpfuncoin on X',
    'PumpFunCoin',
    3121, 1917, now() - interval '4 hours', now() - interval '4 hours'),
   ('https://mytb.ai', 'mytb.ai',

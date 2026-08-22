@@ -2,18 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang } from "@/lib/lang-context";
-import { MIN_BID, MAX_BID } from "@/lib/i18n";
+import { MIN_BID, MAX_BID, TOP1_STEP } from "@/lib/i18n";
 import { identityErrorMessages } from "@/lib/identity";
 
 const stepperBtn =
   "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent bg-primary/15 text-sm font-bold text-primary transition-all outline-none select-none hover:bg-primary/25 hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
 
-export function ClaimForm({ topBid }: { topBid: number }) {
+const usd = (n: number) => "$" + n.toLocaleString("en-US");
+
+type Existing = { url: string; display_name: string; bid_amount: number } | null;
+
+export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string | null }) {
   const { t, lang } = useLang();
-  const [amount, setAmount] = useState(String(Math.max(MIN_BID, topBid + 5)));
+  const [amount, setAmount] = useState(String(Math.max(MIN_BID, topBid + TOP1_STEP)));
   const [identity, setIdentity] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [existing, setExisting] = useState<Existing>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Keep the suggested #1 price in sync when the board changes and the user
@@ -21,8 +26,29 @@ export function ClaimForm({ topBid }: { topBid: number }) {
   const touched = useRef(false);
 
   useEffect(() => {
-    if (!touched.current) setAmount(String(Math.max(MIN_BID, topBid + 5)));
+    if (!touched.current) setAmount(String(Math.max(MIN_BID, topBid + TOP1_STEP)));
   }, [topBid]);
+
+  // Live existing-listing detection (debounced, like the reference):
+  // "Already on the board at $X. Checkout only charges the $N difference."
+  useEffect(() => {
+    const v = identity.trim();
+    if (!v) {
+      setExisting(null);
+      return;
+    }
+    const tm = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/lookup?identity=${encodeURIComponent(v)}`, { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+        setExisting(d.existing ?? null);
+      } catch {
+        /* ignore */
+      }
+    }, 350);
+    return () => clearTimeout(tm);
+  }, [identity]);
 
   // "claim this rank for $X" buttons elsewhere on the page
   useEffect(() => {
@@ -44,16 +70,34 @@ export function ClaimForm({ topBid }: { topBid: number }) {
     setAmount(String(clamp(next)));
   };
 
+  const value = parseInt(amount, 10) || 0;
+  const diff = existing && value > existing.bid_amount ? value - existing.bid_amount : 0;
+  const isTop1Listing =
+    existing != null && topUrl != null && existing.url === topUrl;
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const value = parseInt(amount, 10);
     if (!Number.isFinite(value) || value < MIN_BID) {
       setError(identityErrorMessages("too-low", lang));
       return;
     }
     if (value > MAX_BID) {
       setError(identityErrorMessages("over-max", lang));
+      return;
+    }
+    // Taking #1 from someone else costs top bid + $5 (the current #1 may
+    // extend its own lead by any amount ≥ $1).
+    if (!isTop1Listing && value > topBid && value < topBid + TOP1_STEP) {
+      setError(t.toTake1(topBid + TOP1_STEP));
+      return;
+    }
+    if (existing && value <= existing.bid_amount) {
+      setError(
+        lang === "ar"
+          ? `هذه القائمة بسعر ${usd(existing.bid_amount)} بالفعل — ارفع سعرك بدولار واحد على الأقل`
+          : `This listing is already at ${usd(existing.bid_amount)} — raise your bid by at least $1`
+      );
       return;
     }
     setLoading(true);
@@ -76,10 +120,12 @@ export function ClaimForm({ topBid }: { topBid: number }) {
     }
   };
 
+  const headline = existing ? t.raiseTo1For : t.claim1For;
+
   return (
     <section id="claim" className="scroll-mt-6">
       <h2 className="flex flex-wrap items-center justify-center gap-x-2 text-center text-[28px] font-bold tracking-[-0.03em] text-pretty md:text-[40px]">
-        <span>{t.claim1For}</span>
+        <span>{headline}</span>
         <span className="inline-flex items-center gap-2">
           <button
             type="button"
@@ -157,7 +203,7 @@ export function ClaimForm({ topBid }: { topBid: number }) {
             disabled={loading || !identity.trim()}
             className="inline-flex h-11 w-full shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-transparent bg-primary px-5 text-sm font-bold whitespace-nowrap text-primary-foreground transition-all outline-none select-none hover:bg-primary/80 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
           >
-            {loading ? "…" : t.outbid}
+            {loading ? "…" : existing && diff > 0 ? t.payMore(diff) : t.outbid}
           </button>
         </div>
         {error && (
@@ -165,9 +211,15 @@ export function ClaimForm({ topBid }: { topBid: number }) {
             {error}
           </p>
         )}
-        <p className="text-center text-xs leading-relaxed text-muted-foreground text-pretty">
-          {t.alreadyOnList}
-        </p>
+        {existing && diff > 0 && !error ? (
+          <p className="text-center text-xs font-medium leading-relaxed text-muted-foreground text-pretty">
+            {t.alreadyOnBoardAt(existing.bid_amount, diff)}
+          </p>
+        ) : (
+          <p className="text-center text-xs leading-relaxed text-muted-foreground text-pretty">
+            {t.alreadyOnList}
+          </p>
+        )}
       </form>
     </section>
   );

@@ -2,7 +2,9 @@
 
 import type { Listing } from "@/lib/types";
 import { useLang } from "@/lib/lang-context";
+import { TOP1_STEP } from "@/lib/i18n";
 import { timeAgo, formatUsd, avatarInitial } from "@/lib/format";
+import { Avatar } from "@/components/avatar";
 
 export function ListingRow({
   listing,
@@ -18,7 +20,8 @@ export function ListingRow({
   separatorAfter?: { label: string; afterRank: number } | null;
 }) {
   const { t } = useLang();
-  const claimPrice = listing.bid_amount + 1;
+  // Taking #1 costs the current top bid + $5; every other rank is +$1.
+  const claimPrice = rank === 1 ? listing.bid_amount + TOP1_STEP : listing.bid_amount + 1;
   const claim = () =>
     window.dispatchEvent(
       new CustomEvent("outbidarabs:claim", { detail: { amount: claimPrice } })
@@ -56,9 +59,12 @@ export function ListingRow({
                 #{rank}
               </span>
             )}
-            <span className="flex size-10 shrink-0 select-none items-center justify-center rounded-md bg-muted text-sm text-muted-foreground md:size-14">
-              {avatarInitial(listing.display_name)}
-            </span>
+            <Avatar
+              name={listing.display_name}
+              url={listing.target_url || listing.url}
+              src={listing.image_url}
+              className="size-10 bg-card text-sm shadow-sm ring-1 ring-black/5 md:size-14 md:text-lg dark:ring-white/10"
+            />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">

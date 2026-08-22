@@ -2,8 +2,19 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/lang-context";
+import { PER_PAGE } from "@/lib/i18n";
 
-export function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
+export function Pagination({
+  page,
+  totalPages,
+  total,
+  onRefresh,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onRefresh?: () => void;
+}) {
   const { t } = useLang();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -25,7 +36,10 @@ export function Pagination({ page, totalPages }: { page: number; totalPages: num
   if (page < totalPages - 2) push("…");
   if (totalPages > 1) add(totalPages);
 
-  if (totalPages <= 1) return null;
+  if (totalPages <= 1 && total <= 0) return null;
+
+  const from = total > 0 ? (page - 1) * PER_PAGE + 1 : 0;
+  const to = Math.min(total, page * PER_PAGE);
 
   return (
     <nav aria-label={t.navLeaderboard} className="mt-5 flex flex-col items-center gap-2">
@@ -88,6 +102,34 @@ export function Pagination({ page, totalPages }: { page: number; totalPages: num
           </svg>
         </button>
       </div>
+      {total > 0 && (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {t.ofCount(from, to, total)}
+        </p>
+      )}
+      {onRefresh && (
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className="size-3.5"
+          >
+            <path
+              d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            />
+          </svg>
+          {t.refresh}
+        </button>
+      )}
     </nav>
   );
 }

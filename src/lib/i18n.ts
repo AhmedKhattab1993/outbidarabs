@@ -1,5 +1,7 @@
 export type Lang = "ar" | "en";
 
+const usd = (n: number) => "$" + n.toLocaleString("en-US");
+
 export const dict = {
   ar: {
     siteName: "outbidarabs",
@@ -11,6 +13,7 @@ export const dict = {
     visitorsSinceLaunch: "زائر منذ الإطلاق",
     seeStats: "شاهد الإحصائيات ←",
     claim1For: "احصل على المركز الأول مقابل",
+    raiseTo1For: "ارفع إلى المركز الأول مقابل",
     amountDollars: "المبلغ بالدولار",
     decreaseBid: "أنقص دولاراً",
     increaseBid: "زد دولاراً",
@@ -19,8 +22,12 @@ export const dict = {
       "الدفع بأقل من سعر المركز الأول يضعك على اللوحة في المركز الذي يستطيع هذا المبلغ الوصول إليه.",
     placeholder: "رابط موقعك أو @معرّفك",
     outbid: "زايد",
+    payMore: (n: number) => `ادفع ${usd(n)} أكثر`,
+    alreadyOnBoardAt: (bid: number, diff: number) =>
+      `موجود على اللوحة بسعر ${usd(bid)}. الدفع يحتسب فرق ${usd(diff)} فقط.`,
+    toTake1: (price: number) => `لتأخذ المركز الأول، زايد بما لا يقل عن ${usd(price)}.`,
     alreadyOnList: "موجود على اللائمة بالفعل؟ أدخل نفس الرابط أو @المعرّف وارفع سعرك.",
-    trending: "🔥 الأكثر رواجاً الآن",
+    trending: "الأكثر رواجاً الآن",
     clicksPerHour: "نقرة/س",
     latestActivity: "آخر النشاطات",
     showMore: "المزيد",
@@ -34,6 +41,19 @@ export const dict = {
     clicks: (n: string) => `${n} نقرة`,
     claimRankFor: "احصل على هذا المركز مقابل",
     top: "الأفضل",
+    ofCount: (from: number, to: number, total: number) =>
+      `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} من ${total.toLocaleString("en-US")}`,
+    refresh: "تحديث",
+    earningsPrefix: "هذا",
+    earningsHighlight: "المشروع الجانبي البسيط",
+    earningsSuffix: "جنى",
+    sinceItsLaunch: "منذ إطلاقه",
+    launchedOnDate: "21 أغسطس 2025",
+    launchedOnSentence: (d: string) => `أُطلق الموقع في ${d}.`,
+    crazyThings: "بعض الأشياء المجنونة التي حدثت منذ ذلك الحين:",
+    highestBidSoFar: "أعلى مزايدة (حتى الآن)",
+    listingsOnBoard: (n: number) => `${n.toLocaleString("en-US")} موقعًا على اللوحة`,
+    totalPaidSoFar: (s: string) => `إجمالي المدفوعات ${s}`,
     // rules page
     rulesTitle: "القواعد",
     rulesIntro:
@@ -80,6 +100,7 @@ export const dict = {
     visitorsSinceLaunch: "visitors since launch",
     seeStats: "see stats →",
     claim1For: "Claim #1 for",
+    raiseTo1For: "Raise to #1 for",
     amountDollars: "Amount in dollars",
     decreaseBid: "Decrease bid by one dollar",
     increaseBid: "Increase bid by one dollar",
@@ -88,8 +109,12 @@ export const dict = {
       "Paying less than the #1 price still puts you on the board at whatever place that bid can take.",
     placeholder: "Your product URL or @handle",
     outbid: "Outbid",
+    payMore: (n: number) => `Pay ${usd(n)} more`,
+    alreadyOnBoardAt: (bid: number, diff: number) =>
+      `Already on the board at ${usd(bid)}. Checkout only charges the ${usd(diff)} difference.`,
+    toTake1: (price: number) => `To take #1, bid at least ${usd(price)}.`,
     alreadyOnList: "Already on the list? Enter the same URL or @handle and up your bid.",
-    trending: "🔥 Trending right now",
+    trending: "Trending right now",
     clicksPerHour: "clicks/h",
     latestActivity: "Latest activity",
     showMore: "Show more",
@@ -101,6 +126,20 @@ export const dict = {
     clicks: (n: string) => `${n} clicks`,
     claimRankFor: "claim this rank for",
     top: "Top",
+    ofCount: (from: number, to: number, total: number) =>
+      `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
+    refresh: "Refresh",
+    earningsPrefix: "This",
+    earningsHighlight: "simple side project",
+    earningsSuffix: "made",
+    sinceItsLaunch: "since its launch",
+    launchedOnDate: "August 21st, 2025",
+    launchedOnSentence: (d: string) => `The site launched on ${d}.`,
+    crazyThings: "A few crazy things that happened since then:",
+    highestBidSoFar: "highest bid (so far)",
+    listingsOnBoard: (n: number) => `${n.toLocaleString("en-US")} listings on the board`,
+    totalPaidSoFar: (s: string) => `${s} paid to date`,
+    // rules page
     rulesTitle: "Rules",
     rulesIntro:
       "OutbidArabs is a public leaderboard. There are no ads, no API keys, and no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
@@ -126,6 +165,7 @@ export const dict = {
     rulesAfterTitle: "After you pay",
     rulesAfter1: "Your listing is public. Clicks go to the URL or profile you submitted, without query parameters.",
     rulesAfter2: "A completed payment is what claims the rank.",
+    // about
     aboutTitle: "About",
     footerBuiltBy: "Built by",
     footerBroughtBy: "Brought to you by",
@@ -135,12 +175,7 @@ export const dict = {
   },
 } as const;
 
-export type Dict = (typeof dict)["en"] & {
-  minutesAgo: (n: number) => string;
-  hoursAgo: (n: number) => string;
-  daysAgo: (n: number) => string;
-  clicks: (n: string) => string;
-};
+export type Dict = (typeof dict)["en"];
 
 export function getDict(lang: Lang): Dict {
   return dict[lang] as Dict;
@@ -149,3 +184,9 @@ export function getDict(lang: Lang): Dict {
 export const MIN_BID = 5;
 export const MAX_BID = 999999;
 export const TOP1_STEP = 5; // taking #1 costs top bid + $5
+export const PER_PAGE = 50; // rows per leaderboard page (matches reference)
+
+// Public launch timestamp (overridable via env). Used by the earnings card
+// and the About page.
+export const LAUNCH_ISO =
+  process.env.NEXT_PUBLIC_LAUNCH_DATE || "2025-08-21T20:00:00.000Z";

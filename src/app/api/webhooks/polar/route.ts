@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
-import { applyPaidListing } from "@/lib/store";
+import { applyPaidListing, getListingByUrl } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +21,9 @@ export async function POST(req: Request) {
     throw e;
   }
 
-  // In this SDK version a paid checkout arrives as `checkout.updated`
-  // with status "confirmed" (authorized) or "succeeded" (captured).
+  // A paid checkout arrives as `checkout.updated` with status "confirmed"
+  // (authorized) or "succeeded" (captured). Both are money in the bank —
+  // applyPaidListing is idempotent per checkout id.
   const isCheckoutPaid =
     (event.type === "checkout.updated" || event.type === "checkout.created") &&
     (event.data as any)?.status in { confirmed: 1, succeeded: 1 };
@@ -35,17 +36,31 @@ export async function POST(req: Request) {
   const metadata = payload?.metadata ?? {};
   const identityUrl = metadata.identity_url;
   const amount = parseInt(String(metadata.amount ?? "0"), 10);
+  const baseBid = parseInt(String(metadata.base_bid ?? "0"), 10) || 0;
+  const charge = parseInt(String(metadata.charge ?? "0"), 10) || amount;
   if (!identityUrl || !amount) {
     console.error("polar webhook missing metadata", payload?.id);
     return NextResponse.json({ received: true });
+  }
+
+  // Race safety: the board may have moved since checkout was created. The
+  // payer paid `charge` to raise the listing by that much — make sure their
+  // payment always buys exactly that raise, whatever the current bid is.
+  const current = await getListingByUrl(identityUrl);
+  let effectiveAmount = amount;
+  if (current && amount <= current.bid_amount) {
+    effectiveAmount = current.bid_amount + charge;
   }
 
   const result = await applyPaidListing({
     url: identityUrl,
     displayName: metadata.display_name ?? identityUrl,
     description: metadata.description || null,
-    amount,
+    imageUrl: metadata.image_url || null,
+    targetUrl: metadata.target_url || null,
+    amount: effectiveAmount,
     orderId: payload?.id ?? `polar_${Date.now()}`,
+    skipWindowCheck: true, // payment already captured — apply, never reject
   });
 
   if (!result.ok) {

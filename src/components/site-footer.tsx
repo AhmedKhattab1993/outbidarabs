@@ -19,6 +19,10 @@ export function SiteFooter() {
         · {t.inspiredBy} ·{" "}
         <a className="text-primary transition-colors hover:text-primary/80" href="/rules">
           {t.footerRules}
+        </a>{" "}
+        ·{" "}
+        <a className="text-primary transition-colors hover:text-primary/80" href="/about">
+          {t.footerLiveStats}
         </a>
       </p>
     </footer>

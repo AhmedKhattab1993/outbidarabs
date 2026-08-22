@@ -1,14 +1,18 @@
 // Identity handling: normalize a submitted URL / @handle into a canonical
 // listing key, strip tracking params, and reject forbidden inputs.
 
-const TRACKING_PARAM_PREFIXES = ["utm_", "fb_", "gclid", "mc_", "ref", "affiliate", "aff", "igshid", "ttclid", "s", "source"];
-
+// Hosts where every path is forbidden (chat / invite platforms).
 const FORBIDDEN_HOSTS = [
   "t.me", "telegram.me", "telegram.dog", "joinchat.com",
   "chat.whatsapp.com", "wa.me", "api.whatsapp.com",
-  "discord.gg", "discord.com/invite", "discordapp.com/invite",
-  "m.me", "messenger.com/t",
-  "signal.me", "signal.group",
+  "discord.gg", "m.me", "signal.me", "signal.group",
+  "messenger.com",
+];
+
+// Hosts where only specific paths are forbidden.
+const FORBIDDEN_HOST_PATHS: Array<{ host: string; prefix: string }> = [
+  { host: "discord.com", prefix: "/invite" },
+  { host: "discordapp.com", prefix: "/invite" },
 ];
 
 const SHORTENER_HOSTS = [
@@ -17,16 +21,21 @@ const SHORTENER_HOSTS = [
   "adf.ly", "bit.do", "lnkd.in", "s.id", "linktr.ee",
 ];
 
-const NSFW_PATTERNS = [
-  "porn", "xxx", "nsfw", "sex", "escort", "camgirl", "onlyfans", "hentai",
-  "adult", "نياكة", "سكس", "إباحي", "اباحي", "بورن",
-];
+// Latin NSFW terms are matched on word boundaries so innocent substrings
+// ("sussex", "essex", "brighton") don't trip; Arabic terms use substring match.
+const NSFW_PATTERN =
+  /\b(porn|xxx|nsfw|sex|escort|camgirl|onlyfans|hentai|adult|18\+)\b/i;
+const NSFW_ARABIC = ["نياكة", "سكس", "إباحي", "اباحي", "بورن"];
+
+function hostMatches(host: string, target: string): boolean {
+  return host === target || host.endsWith("." + target);
+}
 
 export type NormalizedIdentity = {
   ok: true;
-  url: string;          // canonical key, no tracking params
+  url: string;          // canonical key: origin + path (+ play-store id), no tracking params
   display_name: string; // shown on the board
-  href: string;         // where clicks go
+  href: string;         // where clicks go (same param rules as the key)
 };
 
 export type IdentityError = {
@@ -44,7 +53,7 @@ export function normalizeIdentity(input: string): NormalizedIdentity | IdentityE
     const handle = handleMatch[1];
     return {
       ok: true,
-      url: `https://x.com/${handle}`,
+      url: `https://x.com/${handle.toLowerCase()}`,
       display_name: `@${handle}`,
       href: `https://x.com/${handle}`,
     };
@@ -71,38 +80,40 @@ export function normalizeIdentity(input: string): NormalizedIdentity | IdentityE
 
   const host = u.hostname.toLowerCase().replace(/^www\./, "");
 
-  // Forbidden: chat / invite links
+  // Forbidden: chat / invite links — exact host (or subdomain) matching only,
+  // so e.g. about.me or xt.me don't false-positive.
   for (const f of FORBIDDEN_HOSTS) {
-    if (host === f || u.href.toLowerCase().includes(f)) {
+    if (hostMatches(host, f)) return { ok: false, reason: "forbidden-chat" };
+  }
+  for (const { host: fh, prefix } of FORBIDDEN_HOST_PATHS) {
+    if (hostMatches(host, fh) && u.pathname.toLowerCase().startsWith(prefix)) {
       return { ok: false, reason: "forbidden-chat" };
     }
   }
 
   // Forbidden: shorteners
   for (const s of SHORTENER_HOSTS) {
-    if (host === s) return { ok: false, reason: "shortener" };
+    if (hostMatches(host, s)) return { ok: false, reason: "shortener" };
   }
 
-  // Forbidden: NSFW keywords anywhere in the URL
-  const lower = u.href.toLowerCase();
-  for (const p of NSFW_PATTERNS) {
-    if (lower.includes(p)) return { ok: false, reason: "nsfw" };
+  // Forbidden: NSFW keywords in the host or path
+  const checkable = `${u.hostname}${u.pathname}`;
+  if (NSFW_PATTERN.test(decodeURIComponent(checkable))) return { ok: false, reason: "nsfw" };
+  for (const p of NSFW_ARABIC) {
+    if (checkable.includes(p)) return { ok: false, reason: "nsfw" };
   }
 
-  // Strip tracking params: drop known tracking keys, keep functional paths
-  // (App Store / Play Store / GitHub are keyed by path).
-  const params = [...u.searchParams.entries()];
+  // Query parameters are stripped from listing links (affiliate/referral/tracking
+  // won't work). Exception: the Play Store `id` param — it identifies the app,
+  // so different apps don't share a bid.
+  const playId = host === "play.google.com" ? u.searchParams.get("id") : null;
   u.search = "";
-  const kept = params.filter(
-    ([k]) => !TRACKING_PARAM_PREFIXES.some((p) => k.toLowerCase().startsWith(p))
-  );
-  if (kept.length) for (const [k, v] of kept) u.searchParams.append(k, v);
   u.hash = "";
+  if (playId) u.searchParams.set("id", playId);
 
-  // Canonical key: protocol + host + path (params stripped for identity),
-  // but keep the cleaned params on the click-through href.
-  const cleanParams = [...u.searchParams.entries()];
-  const key = `${u.origin}${u.pathname === "/" ? "" : u.pathname}`.toLowerCase();
+  const key = `${u.origin}${u.pathname === "/" ? "" : u.pathname}${
+    playId ? `?id=${playId}` : ""
+  }`.toLowerCase();
   const href = u.toString();
 
   let displayName = host;
@@ -114,7 +125,7 @@ export function normalizeIdentity(input: string): NormalizedIdentity | IdentityE
     displayName = "App Store";
     const m = u.pathname.match(/\/id(\d+)/);
     if (m) displayName = `App Store · ${m[1]}`;
-  } else if (host.endsWith("play.google.com")) {
+  } else if (host === "play.google.com") {
     displayName = "Play Store";
     const id = u.searchParams.get("id");
     if (id) displayName = `Play Store · ${id.split(".").pop()}`;
@@ -142,6 +153,8 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
     },
     shortener: { ar: "روابط التقصير ممنوعة", en: "Link shorteners are not allowed" },
     nsfw: { ar: "المحتوى للبالغين ممنوع", en: "Adult content is not allowed" },
+    "too-low": { ar: "الحد الأدنى $5", en: "Minimum bid is $5" },
+    "over-max": { ar: "الحد الأقصى $999,999", en: "Maximum bid is $999,999" },
   };
   return (msgs[reason] ?? msgs.invalid)[lang];
 }

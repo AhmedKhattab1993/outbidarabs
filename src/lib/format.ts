@@ -22,3 +22,15 @@ export function timeAgo(iso: string, t: Dict): string {
   if (hours < 24) return t.hoursAgo(hours);
   return t.daysAgo(Math.floor(hours / 24));
 }
+
+/** Duration without the "ago/منذ" prefix — for "since its launch N days" phrasing. */
+export function durationSince(iso: string, t: Dict): string {
+  const hours = Math.max(0, (Date.now() - new Date(iso).getTime()) / 3_600_000);
+  if (hours < 1) return t.justNow;
+  if (hours < 24) {
+    const h = Math.max(1, Math.floor(hours));
+    return t.hoursAgo(h).replace(/^منذ\s+/, "").replace(/\s+ago$/, "");
+  }
+  const d = Math.floor(hours / 24);
+  return t.daysAgo(d).replace(/^منذ\s+/, "").replace(/\s+ago$/, "");
+}

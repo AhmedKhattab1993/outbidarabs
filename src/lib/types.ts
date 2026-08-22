@@ -1,6 +1,8 @@
 export type Listing = {
   id: string;
-  url: string;
+  url: string; // canonical identity key (protocol + host + path, params stripped)
+  target_url?: string | null; // click-through href (params stripped, play-store id kept)
+  image_url?: string | null; // og:image captured at submission
   display_name: string;
   description: string | null;
   bid_amount: number;
@@ -15,6 +17,8 @@ export type ActivityItem = {
   amount: number;
   rank: number;
   created_at: string;
+  image_url?: string | null;
+  target_url?: string | null;
 };
 
 export type TrendingItem = {
@@ -31,10 +35,12 @@ export type SiteStats = {
   listingCount: number;
   highestBid: number;
   highestBidder: string | null;
+  launchedAt: string; // ISO
 };
 
 export type LeaderboardPage = {
   listings: Listing[];
   totalPages: number;
+  total: number;
   topBid: number;
 };

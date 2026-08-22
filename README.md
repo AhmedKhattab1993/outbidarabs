@@ -229,7 +229,10 @@ layer 3 and documented above — the script never calls Polar.
 
 1. Create a project at [supabase.com](supabase.com)
 2. Run `supabase/schema.sql` in the SQL editor (tables, indexes, RLS, functions)
-3. Optionally run `supabase/seed.sql` for a populated board
+3. Optionally run `supabase/seed.sql` for a populated board — in the SQL editor,
+   or without a psql connection string:
+   `node scripts/seed-rest.mjs <supabase-url> <service-role-key>` (same data,
+   through PostgREST)
 4. Copy **Settings → API**: project URL + anon key into `NEXT_PUBLIC_SUPABASE_URL` /
    `NEXT_PUBLIC_ANON_KEY`, and the service-role key into
    `SUPABASE_SERVICE_ROLE_KEY` (server writes: webhook + click redirect + presence)

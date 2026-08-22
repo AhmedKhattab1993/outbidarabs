@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
 import { getDict, type Lang } from "@/lib/i18n";
+import { Analytics } from "@/lib/analytics";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -32,9 +33,9 @@ export const metadata: Metadata = {
   },
 };
 
-// Analytics (DataFast / Vemetric / any provider): set the script URL and
-// site id from the provider's embed snippet; NEXT_PUBLIC_ANALYTICS_URL is
-// the public dashboard linked from "see stats →" and the footer.
+// Analytics (DataFast): the official SDK is initialized client-side in
+// src/lib/analytics.ts. NEXT_PUBLIC_ANALYTICS_URL is the public dashboard
+// linked from "see stats →" and the footer.
 const ANALYTICS_SCRIPT_URL = process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL;
 const ANALYTICS_SITE_ID = process.env.NEXT_PUBLIC_ANALYTICS_SITE_ID;
 
@@ -57,6 +58,7 @@ export default async function RootLayout({
             data-site-id={ANALYTICS_SITE_ID || undefined}
           />
         )}
+        <Analytics />
         <ThemeProvider>
           <LangProvider initialLang={lang}>{children}</LangProvider>
         </ThemeProvider>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang } from "@/lib/lang-context";
 import { MIN_BID, MAX_BID, TOP1_STEP } from "@/lib/i18n";
 import { identityErrorMessages } from "@/lib/identity";
+import { trackEvent } from "@/lib/analytics";
 
 const stepperBtn =
   "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent bg-primary/15 text-sm font-bold text-primary transition-all outline-none select-none hover:bg-primary/25 hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
@@ -101,6 +102,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
       return;
     }
     setLoading(true);
+    trackEvent("checkout_started", { amount: value, raise: !!existing });
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",

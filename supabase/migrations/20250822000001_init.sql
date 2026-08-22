@@ -164,7 +164,11 @@ alter table site_stats enable row level security;
 alter table presence enable row level security;
 alter table processed_checkouts enable row level security;
 
--- Public read
+-- Public read (drop first so the file can be re-pasted safely)
+drop policy if exists "public read listings" on listings;
+drop policy if exists "public read clicks" on clicks;
+drop policy if exists "public read activity" on activity;
+drop policy if exists "public read stats" on site_stats;
 create policy "public read listings" on listings for select using (true);
 create policy "public read clicks" on clicks for select using (true);
 create policy "public read activity" on activity for select using (true);

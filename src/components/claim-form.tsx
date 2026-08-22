@@ -382,7 +382,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
 
         {/* ── Bid amount + CTA (centered under the input, matching the form) ── */}
         <div className="flex flex-col items-stretch justify-center gap-2 md:flex-row md:items-center">
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
             <button
               type="button"
               aria-label={t.decreaseBid}
@@ -395,9 +395,9 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
             >
               −
             </button>
-            <label className="relative inline-block min-w-24 text-2xl font-bold tracking-[-0.03em] text-primary tabular-nums">
+            <label className="relative inline-block text-2xl font-bold tracking-[-0.03em] text-primary tabular-nums">
               <span className="sr-only">{t.amountDollars}</span>
-              <span className="invisible whitespace-nowrap px-1" aria-hidden="true">
+              <span className="invisible whitespace-nowrap px-0.5" aria-hidden="true">
                 ${amount || "0"}
               </span>
               <span className="absolute inset-0 flex items-baseline justify-center whitespace-nowrap">

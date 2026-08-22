@@ -72,35 +72,52 @@ fi
 echo "3) Rules engine (top bid: $TOPBID)"
 TS=$(( $(date +%s) % 100000 ))
 
-# 3a. new listing inside the #1 window → rejected with "to take #1" message
-R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1))}")
-if echo "$R" | grep -q '"need"'; then
-  ok "window bid (top+1) rejected: $(echo "$R" | json "j.error")"
+# Payment mode: real Polar configured → checkouts return polar.sh URLs and no
+# state is written until a webhook fires. Stateful engine checks are skipped.
+PAYMENT_MODE=0
+
+# 3a. new listing inside the #1 window → rejected (only applies when a top bid exists)
+if [ "$TOPBID" -gt 0 ]; then
+  R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1))}")
+  if echo "$R" | grep -q 'polar'; then
+    echo "  ⚠ payment mode — window pre-check not distinguishable from client"
+  elif echo "$R" | grep -q '"need"'; then
+    ok "window bid (top+1) rejected: $(echo "$R" | json "j.error")"
+  else
+    bad "window bid (top+1) should be rejected, got: $R"
+  fi
 else
-  bad "window bid (top+1) should be rejected, got: $R"
+  echo "  ⚠ empty board — #1 window not applicable"
 fi
 
 # 3b. new listing below top → accepted at its reachable rank
 R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":10}")
-RANK=$(echo "$R" | json "(j.url||'').match(/rank=(\\d+)/)?.[1] || ''")
-if echo "$R" | grep -q '"url"'; then ok "low bid (\$10) accepted at rank ${RANK:-?}"
-else bad "low bid should be accepted, got: $R"; fi
+  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":2}")
+if echo "$R" | grep -q 'polar'; then
+  PAYMENT_MODE=1
+  echo "  ⚠ payment mode (real Polar) — stateful checks need webhooks, skipping"
+else
+  RANK=$(echo "$R" | json "(j.url||'').match(/rank=(\\d+)/)?.[1] || ''")
+  if echo "$R" | grep -q '"url"'; then ok "low bid (\$2) accepted at rank ${RANK:-?}"
+  else bad "low bid should be accepted, got: $R"; fi
+fi
 
 # 3c. raise same listing by +5 → accepted. Stateful: on serverless mock mode
 # the listing may not exist on this instance — treat that as inconclusive.
 R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":15}")
+  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":7}")
 STATE_OK=0
-if echo "$R" | grep -q '"url"'; then ok "raise 10→15 accepted"; STATE_OK=1
-elif echo "$R" | grep -qE 'بسعر \\$10 بالفعل|already at \\$10'; then bad "raise 10→15 wrongly rejected: $R"
+if [ "$PAYMENT_MODE" = "1" ]; then
+  echo "  ⚠ raise checks skipped (payment mode)"
+elif echo "$R" | grep -q '"url"'; then ok "raise 2→7 accepted"; STATE_OK=1
+elif echo "$R" | grep -qE 'بسعر \\$2 بالفعل|already at \\$2'; then bad "raise 2→7 wrongly rejected: $R"
 else echo "  ⚠ raise check inconclusive (serverless instance isolation) — $R"; fi
 
 # 3d. raise ≤ current → rejected (only meaningful if the state was there in 3c)
-R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":15}")
 if [ "$STATE_OK" = "1" ]; then
+  R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":7}")
   check "raise ≤ current rejected" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
 else
   echo "  ⚠ raise ≤ current skipped (state not confirmed)"

@@ -175,8 +175,9 @@ bash scripts/smoke.sh https://outbidarabs.lol    # verify live
   + `POLAR_WEBHOOK_SECRET` + `POLAR_ENVIRONMENT=production`,
   `NEXT_PUBLIC_SITE_URL=https://outbidarabs.lol`, optional
   `NEXT_PUBLIC_LAUNCH_DATE`
-- Supabase prod project: `schema.sql` applied, `seed.sql` only if you want a
-  populated launch board, Realtime enabled for `listings` + `activity`
+- Supabase prod project: `schema.sql` applied, Realtime enabled for `listings`
+  + `activity` — **and no seed data**: production launches empty (fictional
+  bids/clicks/revenue must never be presented as real activity)
 - Polar production webhook `https://outbidarabs.lol/api/webhooks/polar`
   subscribed to checkout events; test once with a real small payment and refund it
 - After first real webhook: confirm `total_revenue` grew and the activity feed
@@ -195,8 +196,12 @@ bash scripts/smoke.sh https://outbidarabs.lol    # verify live
 `vercel alias set <old-deployment-url> outbidarabs.lol` (near-instant; DB
 schema rollbacks are separate — apply reverse SQL carefully).
 
-**Current state:** production is live but in **mock mode** (no Supabase, no
-Polar) — treat it as staging until the Layer 3/4 prerequisites are done.
+**Current state:** production is live on the real stack (prod Supabase +
+production Polar + DataFast) with an **empty board** — the honest launch state.
+⚠️ **Never apply seed data to production**: the seed rows (and the
+`total_revenue` sum of their bids) are fictional. Real listings/revenue may
+only come from real payments. `scripts/seed-rest.mjs` is for **staging and
+local demos only**.
 
 ### Pre-promote smoke checklist
 
@@ -236,10 +241,11 @@ layer 3 and documented above — the script never calls Polar.
 
 1. Create a project at [supabase.com](supabase.com)
 2. Run `supabase/schema.sql` in the SQL editor (tables, indexes, RLS, functions)
-3. Optionally run `supabase/seed.sql` for a populated board — in the SQL editor,
-   or without a psql connection string:
+3. **Staging/local only:** run `supabase/seed.sql` for a populated demo board —
+   in the SQL editor, or without a psql connection string:
    `node scripts/seed-rest.mjs <supabase-url> <service-role-key>` (same data,
-   through PostgREST)
+   through PostgREST). Never on production — the seed rows are fictional and
+   would fake bids, clicks and revenue on a live money site
 4. Copy **Settings → API**: project URL + anon key into `NEXT_PUBLIC_SUPABASE_URL` /
    `NEXT_PUBLIC_ANON_KEY`, and the service-role key into
    `SUPABASE_SERVICE_ROLE_KEY` (server writes: webhook + click redirect + presence)

@@ -448,7 +448,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
           <span className="font-semibold text-primary/80">
             {t.startsFrom} ${MIN_BID}.
           </span>{" "}
-          {topBid > 0 ? t.top1Hint(topBid + 1) : t.anyBidTakesIt}
+          {topBid > 0 ? t.top1Hint(topBid + 1) : t.boardEmptyCta}
         </p>
         <p className="text-center text-xs leading-relaxed text-muted-foreground/80 text-pretty">
           {t.alreadyOnList}

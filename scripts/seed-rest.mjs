@@ -16,6 +16,28 @@ if (!url || !key) {
   console.error("need <url> <service-role key> (args or env)");
   process.exit(1);
 }
+
+// ── Guard: fictional seed data must never reach production ──
+// This script writes made-up listings/bids/clicks/revenue. It is for staging
+// and local demos only. Blocks the known prod project (by ref or by env URL)
+// unless FORCE_SEED_PROD=1 is explicitly set by a human who accepts that the
+// live board will display fake activity.
+const PROD_REFS = ["vyctqxemuhfpuhrsstzg"]; // outbidarabs-prod
+const isProd =
+  PROD_REFS.some((ref) => url.toLowerCase().includes(ref)) ||
+  (process.env.PROD_NEXT_PUBLIC_SUPABASE_URL &&
+    url.replace(/\/$/, "") === process.env.PROD_NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, ""));
+if (isProd && process.env.FORCE_SEED_PROD !== "1") {
+  console.error(
+    "✋ refusing to seed: this looks like the PRODUCTION Supabase project.\n" +
+      "  Seed rows are fictional (fake bids, clicks, revenue) and must never be\n" +
+      "  displayed as real activity on the live board.\n" +
+      "  → For staging/local: pass the staging project URL explicitly.\n" +
+      "  → If you truly accept faking the prod board, re-run with FORCE_SEED_PROD=1."
+  );
+  process.exit(1);
+}
+
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 const mins = (n) => new Date(Date.now() - n * 60_000).toISOString();

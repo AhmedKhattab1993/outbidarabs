@@ -65,6 +65,18 @@ insert into site_stats (key, value) values
 on conflict (key) do nothing;
 
 -- ── Ranking helper: rank of every active listing ──────────
+-- Hosted Supabase grants EXECUTE on public functions to anon/authenticated
+-- (platform-managed privileges that override plain REVOKE), so writer RPCs
+-- guard themselves with assert_service_role() instead of relying on grants.
+create or replace function assert_service_role() returns void
+language plpgsql stable as $$
+begin
+  if coalesce(current_setting('role', true), '') not in ('service_role', 'postgres', 'none') then
+    raise exception 'forbidden: service role required';
+  end if;
+end;
+$$;
+
 create or replace function listing_rank(target uuid) returns integer
 language sql stable as $$
   select count(*) + 1
@@ -78,9 +90,12 @@ $$;
 
 -- Increment clicks + record the click event atomically
 create or replace function register_click(p_listing uuid) returns void
-language sql security definer as $$
+language plpgsql security definer as $$
+begin
+  perform assert_service_role();
   update listings set clicks = clicks + 1 where id = p_listing;
   insert into clicks (listing_id) values (p_listing);
+end;
 $$;
 
 -- Increment a site_stats counter, returns the new value
@@ -89,6 +104,7 @@ language plpgsql security definer as $$
 declare
   new_value bigint;
 begin
+  perform assert_service_role();
   insert into site_stats (key, value) values (p_key, 1)
   on conflict (key) do update set value = site_stats.value + 1
   returning value into new_value;
@@ -102,6 +118,7 @@ language plpgsql security definer as $$
 declare
   new_value bigint;
 begin
+  perform assert_service_role();
   insert into site_stats (key, value) values (p_key, greatest(p_delta, 0))
   on conflict (key) do update set value = site_stats.value + greatest(p_delta, 0)
   returning value into new_value;
@@ -113,6 +130,7 @@ $$;
 create or replace function heartbeat(p_session text) returns integer
 language plpgsql security definer as $$
 begin
+  perform assert_service_role();
   insert into presence (session_id, last_seen) values (p_session, now())
   on conflict (session_id) do update set last_seen = now();
   delete from presence where last_seen < now() - interval '1 hour';
@@ -174,6 +192,8 @@ revoke execute on function heartbeat(text) from public;
 revoke execute on function register_click(uuid) from public;
 revoke execute on function count_online() from public;
 revoke execute on function listing_rank(uuid) from public;
+-- (Best-effort only — hosted Supabase re-grants EXECUTE to anon via platform
+-- privileges; the real enforcement is assert_service_role() in each body.)
 grant execute on function bump_stat(text) to service_role;
 grant execute on function add_stat(text, bigint) to service_role;
 grant execute on function register_click(uuid) to service_role;

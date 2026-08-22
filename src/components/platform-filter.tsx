@@ -40,7 +40,7 @@ export function PlatformFilter({
       aria-label={lang === "ar" ? "تصفية حسب المنصة" : "Filter by platform"}
       className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <div className="flex w-max items-center gap-2">
+      <div className="flex w-max items-center gap-2 mx-auto">
         {pill("all", t.filterAll)}
         {PLATFORMS.map((p) =>
           pill(p, platformLabel(p, lang), <PlatformIcon key={p} platform={p} className="size-3.5" />)

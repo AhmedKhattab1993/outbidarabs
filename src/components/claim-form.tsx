@@ -238,7 +238,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
             spellCheck={false}
             required
             dir="ltr"
-            className="h-12 w-full min-w-0 rounded-2xl border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 ps-12"
+            className="h-12 w-full min-w-0 rounded-2xl border border-input bg-transparent px-3 py-1 text-center text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 ps-12 pe-12"
             value={identity}
             onChange={(e) => {
               setIdentity(e.target.value);

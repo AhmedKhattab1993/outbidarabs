@@ -18,7 +18,16 @@ export function SiteFooter() {
         >
           @outbidarabs
         </a>{" "}
-        · {t.inspiredBy} ·{" "}
+        ·{" "}
+        <a
+          target="_blank"
+          rel="noopener"
+          className="text-primary transition-colors hover:text-primary/80"
+          href="https://outbid.lol"
+        >
+          {t.inspiredBy}
+        </a>{" "}
+        ·{" "}
         <a className="text-primary transition-colors hover:text-primary/80" href="/rules">
           {t.footerRules}
         </a>{" "}

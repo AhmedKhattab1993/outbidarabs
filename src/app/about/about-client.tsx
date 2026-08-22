@@ -41,33 +41,47 @@ export function AboutClient({ stats }: { stats: SiteStats }) {
             {ar ? (
               <>
                 <p className="pt-2">
-                  بدأت <span className="font-semibold text-foreground">outbidarabs.lol</span> كمشروع
-                  جانبي بسيط: لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح. زايد منافسيك فقط لتصل إلى
-                  القمة — هذا كل شيء.
-                </p>
-                <p>
-                  أول منصة عربية للـ Outbid. ادفع أقل من المنافس وارفع للترتيب الأول. موجهة لرواد
-                  الأعمال العرب: مصر، السعودية، الإمارات، الكويت، قطر، البحرين، الأردن، المغرب
-                  وكل العالم العربي.
+                  شاهدنا{" "}
+                  <a
+                    target="_blank"
+                    rel="noopener"
+                    className="font-semibold text-foreground underline decoration-border underline-offset-4 hover:decoration-primary"
+                    href="https://outbid.lol"
+                  >
+                    outbid.lol
+                  </a>{" "}
+                  وتابعنا كيف تحوّلت فكرة بسيطة — الترتيب هو السعر — إلى سباق مفتوح.
+                  أعجبتنا الفكرة كثيراً، فقررنا نبني نسختنا العربية منها: نفس القواعد،
+                  نفس الشفافية، لكن بالعربية وبواجهة RTL ودفع يعمل مع بطاقات المنطقة —
+                  لرواد الأعمال والمبدعين في مصر والسعودية والإمارات والكويت وقطر
+                  والبحرين والأردن والمغرب وكل العالم العربي. هذه ليست ترجمة؛ إنها
+                  اللوحة العربية للـ Outbid.
                 </p>
                 <p className="font-semibold text-foreground">
-                  اللوحة هنا. نفس القواعد. نفس الفكرة. الترتيب هو السعر — لا شيء غير ذلك.
+                  اللوحة هنا. الترتيب هو السعر — لا شيء غير ذلك.
                 </p>
               </>
             ) : (
               <>
                 <p className="pt-2">
-                  <span className="font-semibold text-foreground">outbidarabs.lol</span> started as a
-                  simple side project: no ads, no API keys, no revenue sharing. Just outbid your
-                  competitors to rank #1 — that&apos;s it.
-                </p>
-                <p>
-                  The first Arab-world outbid board. Built for Arab founders, startups, freelancers,
-                  agencies and creators across Egypt, Saudi, UAE, Kuwait, Qatar, Bahrain, Jordan,
-                  Morocco and beyond.
+                  We watched{" "}
+                  <a
+                    target="_blank"
+                    rel="noopener"
+                    className="font-semibold text-foreground underline decoration-border underline-offset-4 hover:decoration-primary"
+                    href="https://outbid.lol"
+                  >
+                    outbid.lol
+                  </a>{" "}
+                  turn “rank is the bid” into an open race — and we loved the idea enough
+                  to build the Arab-world edition: same rules, same transparency,
+                  Arabic-first, RTL, and payments that work with regional cards. Built
+                  for founders, startups, freelancers, agencies and creators across
+                  Egypt, Saudi, UAE, Kuwait, Qatar, Bahrain, Jordan, Morocco and beyond.
+                  This is not a translation; it is the Arab outbid board.
                 </p>
                 <p className="font-semibold text-foreground">
-                  The board is still here. Same rules. Same idea. Rank is the bid — nothing else.
+                  The board is here. Rank is the bid — nothing else.
                 </p>
               </>
             )}

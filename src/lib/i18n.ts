@@ -45,20 +45,20 @@ export const dict = {
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} من ${total.toLocaleString("en-US")}`,
     refresh: "تحديث",
-    earningsPrefix: "هذا",
-    earningsHighlight: "المشروع الجانبي البسيط",
-    earningsSuffix: "جنى",
+    earningsPrefix: "لوحة",
+    earningsHighlight: "العرب للـ Outbid",
+    earningsSuffix: "جنّت",
     sinceItsLaunch: "منذ إطلاقه",
-    launchedOnDate: "21 أغسطس 2025",
+    launchedOnDate: "21 أغسطس 2026",
     launchedOnSentence: (d: string) => `أُطلق الموقع في ${d}.`,
-    crazyThings: "بعض الأشياء المجنونة التي حدثت منذ ذلك الحين:",
+    crazyThings: "أبرز الأرقام منذ الإطلاق:",
     highestBidSoFar: "أعلى مزايدة (حتى الآن)",
     listingsOnBoard: (n: number) => `${n.toLocaleString("en-US")} موقعًا على اللوحة`,
     totalPaidSoFar: (s: string) => `إجمالي المدفوعات ${s}`,
     // rules page
     rulesTitle: "القواعد",
     rulesIntro:
-      "OutbidArabs لوحة تصدر علنية. لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح. تدفع لكي تقف فوق الجميع. الترتيب هو السعر — لا شيء غير ذلك.",
+      "OutbidArabs لوحة تصدر علنية. لا مفاتيح API ولا مشاركة أرباح. تدفع لكي تقف فوق الجميع. الترتيب هو السعر — لا شيء غير ذلك.",
     rulesRankingTitle: "كيف يعمل الترتيب",
     rulesRanking1: "القوائم الجديدة بعملات دولارات كاملة،",
     rulesRankingMin: "الحد الأدنى",
@@ -75,7 +75,7 @@ export const dict = {
     rulesCan2:
       "روابط الدعوة والمجموعات ممنوعة — تيليجرام، واتساب، ديسكورد، ماسنجر، سيجنال وما شابه. اللوحة للمنتجات والملفات الشخصية، وليس لمجموعات الدردشة.",
     rulesCan3:
-      "الروابط لمحتوى جنسي ممنوعة. إذا كان إباحياً أو محتوى للبالغين فلا مكان له على اللوحة.",
+      "الروابط لمحتوى جنسي أو غير قانوني ممنوعة — إباحية، مخدرات، قمار ومراهنات، أسلحة، تزوير، احتيال أو حسابات مسروقة: لا مكان لها على اللوحة.",
     rulesCan4:
       "تُحذف معاملات الاستعلام من الروابط. روابط الإحالة والتتبع لن تعمل.",
     rulesCan5:
@@ -131,20 +131,20 @@ export const dict = {
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
     refresh: "Refresh",
-    earningsPrefix: "This",
-    earningsHighlight: "simple side project",
-    earningsSuffix: "made",
+    earningsPrefix: "The",
+    earningsHighlight: "Arab outbid board",
+    earningsSuffix: "has made",
     sinceItsLaunch: "since its launch",
-    launchedOnDate: "August 21st, 2025",
+    launchedOnDate: "August 21st, 2026",
     launchedOnSentence: (d: string) => `The site launched on ${d}.`,
-    crazyThings: "A few crazy things that happened since then:",
+    crazyThings: "By the numbers since launch:",
     highestBidSoFar: "highest bid (so far)",
     listingsOnBoard: (n: number) => `${n.toLocaleString("en-US")} listings on the board`,
     totalPaidSoFar: (s: string) => `${s} paid to date`,
     // rules page
     rulesTitle: "Rules",
     rulesIntro:
-      "OutbidArabs is a public leaderboard. There are no ads, no API keys, and no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
+      "OutbidArabs is a public leaderboard. No API keys, no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
     rulesRankingTitle: "How ranking works",
     rulesRanking1: "New listings are whole US dollars,",
     rulesRankingMin: "minimum",
@@ -161,7 +161,7 @@ export const dict = {
     rulesCan2:
       "Chat and invite links are not allowed — Telegram, WhatsApp, Discord, Messenger, Signal, and similar. The board is for products and profiles, not group chats.",
     rulesCan3:
-      "Links to sexual content are not allowed. If it is porn, NSFW, or an adult platform, it does not belong on the board.",
+      "Links to sexual or illegal content are not allowed — porn, drugs, gambling and betting, weapons, counterfeit documents, fraud, or stolen accounts do not belong on the board.",
     rulesCan4: "Query parameters are stripped from listing links. Affiliate, referral, and tracking URLs will not work.",
     rulesCan5: "Link shortener URLs are not allowed. If you submit one, it is replaced by the URL it redirects to.",
     rulesAfterTitle: "After you pay",
@@ -191,4 +191,4 @@ export const PER_PAGE = 50; // rows per leaderboard page (matches reference)
 // Public launch timestamp (overridable via env). Used by the earnings card
 // and the About page.
 export const LAUNCH_ISO =
-  process.env.NEXT_PUBLIC_LAUNCH_DATE || "2025-08-21T20:00:00.000Z";
+  process.env.NEXT_PUBLIC_LAUNCH_DATE || "2026-08-21T20:00:00.000Z";

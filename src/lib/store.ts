@@ -241,7 +241,8 @@ function mockOnline(): number {
 
 export async function getStats(): Promise<SiteStats> {
   // Real analytics numbers (DataFast) when configured — the pill and about
-  // page display these; fall back to our own counters otherwise.
+  // page display these; fall back to our own counters otherwise. `online`
+  // falls back separately when only the realtime fetch failed.
   const df = await getDataFastStats();
   if (MOCK_MODE) {
     const all = mockListings();
@@ -254,6 +255,7 @@ export async function getStats(): Promise<SiteStats> {
       highestBid: sorted[0]?.bid_amount ?? 0,
       highestBidder: sorted[0]?.display_name ?? null,
       launchedAt: LAUNCH_ISO,
+      statsSource: df ? "datafast" : "internal",
     };
   }
   const [statsRes, topRes, countRes, onlineRes] = await Promise.all([
@@ -268,14 +270,16 @@ export async function getStats(): Promise<SiteStats> {
     supabaseAdmin().rpc("count_online").maybeSingle(),
   ]);
   const stats = new Map((statsRes.data ?? []).map((s: any) => [s.key, Number(s.value)]));
+  const internalOnline = onlineRes.data != null ? Number(onlineRes.data) : 0;
   return {
-    online: df?.online ?? (onlineRes.data != null ? Number(onlineRes.data) : 0),
+    online: df?.online ?? internalOnline,
     visitors: df?.visitors ?? (stats.get("visitors") ?? 0),
     totalRevenue: stats.get("total_revenue") ?? 0,
     listingCount: countRes.count ?? 0,
     highestBid: topRes.data?.[0]?.bid_amount ?? 0,
     highestBidder: topRes.data?.[0]?.display_name ?? null,
     launchedAt: LAUNCH_ISO,
+    statsSource: df ? "datafast" : "internal",
   };
 }
 

@@ -27,6 +27,36 @@ const NSFW_PATTERN =
   /\b(porn|xxx|nsfw|sex|escort|camgirl|onlyfans|hentai|adult|18\+)\b/i;
 const NSFW_ARABIC = ["نياكة", "سكس", "إباحي", "اباحي", "بورن"];
 
+// Illegal content: narcotics, gambling, weapons, fraud, counterfeit, stolen
+// goods/accounts. Blocked regardless of licensing (gambling is illegal or highly
+// restricted across the target Arab markets; listing it = promotion).
+// FP guards: "betting" yes but bare "bet"/"bets" no (bet.com = BET network;
+// "betterhelp"/"alphabet" would trip); "lottery" yes, bare "lotto" no (Lotto
+// sportswear; Arabic "لوتو" covers regional usage); bare "slots" no (scheduling
+// apps) — only "slot-machines"/"online-slots"; "casino"/"poker"/"jackpot" are
+// near-unambiguous at a word boundary (accepted risk). Known gap: concatenated
+// compounds ("arabcasino.com", "888casino.com") evade \b — the brand list below
+// plus manual takedown (listings.is_active = false) are the backstop.
+const ILLEGAL_PATTERN =
+  /\b(drugs?|narco|narcotics?|cocaine|heroin|crack|meth(?:amphetamine)?|khat|cannabis|weed4sale|darkweb|onion-market|casino|gambling|betting|sportsbook|bookmaker|poker|lottery|jackpot|roulette|craps|baccarat|slot-?machines?|online-?slots?|arms4sale|weapons?|gun4sale|rifle4sale|counterfeit|forged?(?:-| )?(?:documents?|ids?|passports?|licenses?|banknotes?|money)|carding|stolen(?:-| )?(?:accounts?|cards?)|ccdump|fullz|humantrafficking)\b/i;
+const ILLEGAL_ARABIC = [
+  "مخدرات", "حشيش", "بانجو", "أفيون", "افيون", "هيروين", "كوكايين", "ترامادول",
+  "كبتاجون", "استروكس", "شابو", "كازينو", "قمار", "مقامرة", "مراهنة", "مراهنات",
+  "يانصيب", "روليت", "لوتو", "سلاح للبيع", "أسلحة للبيع", "اسلحة للبيع",
+  "تزوير", "عملة مزيفة", "حسابات مسروقة", "بطاقات مسروقة", "احتيال إلكتروني",
+];
+
+// Major gambling operators targeting the Arab market — exact host + subdomain
+// matching via hostMatches(). The keyword patterns cannot catch these
+// ("bet365"/"1xbet" are single words; \bbet\b is deliberately not in the
+// pattern). This is a denylist, not moderation — extend as brands/mirrors appear;
+// listings may also be removed manually (listings.is_active = false).
+const GAMBLING_HOSTS = [
+  "1xbet.com", "bet365.com", "melbet.com", "linebet.com", "mostbet.com",
+  "betway.com", "unibet.com", "bwin.com", "dafabet.com", "w88.com", "fun88.com",
+  "stanleybet.com", "fonbet.com", "betfinal.com",
+];
+
 function hostMatches(host: string, target: string): boolean {
   return host === target || host.endsWith("." + target);
 }
@@ -96,11 +126,30 @@ export function normalizeIdentity(input: string): NormalizedIdentity | IdentityE
     if (hostMatches(host, s)) return { ok: false, reason: "shortener" };
   }
 
-  // Forbidden: NSFW keywords in the host or path
+  // Forbidden: NSFW / illegal keywords in the host or path. NOTE: URL.pathname
+  // percent-encodes non-ASCII, so substring checks must run on the decoded
+  // string (raw checkable would never match Arabic terms). decodeURIComponent
+  // can throw on a literal stray `%` — fall back to the raw string then.
   const checkable = `${u.hostname}${u.pathname}`;
-  if (NSFW_PATTERN.test(decodeURIComponent(checkable))) return { ok: false, reason: "nsfw" };
+  let decoded = checkable;
+  try {
+    decoded = decodeURIComponent(checkable);
+  } catch {
+    /* literal % in the path — check the raw form */
+  }
+  if (NSFW_PATTERN.test(decoded)) return { ok: false, reason: "nsfw" };
   for (const p of NSFW_ARABIC) {
-    if (checkable.includes(p)) return { ok: false, reason: "nsfw" };
+    if (decoded.includes(p)) return { ok: false, reason: "nsfw" };
+  }
+
+  // Forbidden: illegal content — gambling brand hosts first (keyword patterns
+  // can't see "bet365"/"1xbet"), then keyword patterns on host + path.
+  for (const g of GAMBLING_HOSTS) {
+    if (hostMatches(host, g)) return { ok: false, reason: "illegal" };
+  }
+  if (ILLEGAL_PATTERN.test(decoded)) return { ok: false, reason: "illegal" };
+  for (const p of ILLEGAL_ARABIC) {
+    if (decoded.includes(p)) return { ok: false, reason: "illegal" };
   }
 
   // Query parameters are stripped from listing links (affiliate/referral/tracking
@@ -153,6 +202,10 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
     },
     shortener: { ar: "روابط التقصير ممنوعة", en: "Link shorteners are not allowed" },
     nsfw: { ar: "المحتوى للبالغين ممنوع", en: "Adult content is not allowed" },
+    illegal: {
+      ar: "المحتوى غير القانوني ممنوع (مخدرات، قمار، أسلحة، احتيال…)",
+      en: "Illegal content is not allowed (drugs, gambling, weapons, fraud…)",
+    },
     "too-low": { ar: "الحد الأدنى $1", en: "Minimum bid is $1" },
     "over-max": { ar: "الحد الأقصى $999,999", en: "Maximum bid is $999,999" },
   };

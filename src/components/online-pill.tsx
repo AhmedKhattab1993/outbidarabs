@@ -47,8 +47,10 @@ export function OnlinePill({
         });
         firstBeat = false;
         const s = await r.json();
-        if (typeof s.online === "number" && s.online > 0) setOnline(s.online);
-        if (typeof s.visitors === "number" && s.visitors > 0) setVisitors(s.visitors);
+        // Trust the server's number as-is — DataFast zeros must show as 0
+        // (only the initial server-rendered value may be stale).
+        if (typeof s.online === "number") setOnline(s.online);
+        if (typeof s.visitors === "number") setVisitors(s.visitors);
       } catch {
         /* offline */
       }

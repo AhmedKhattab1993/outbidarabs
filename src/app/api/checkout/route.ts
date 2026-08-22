@@ -158,6 +158,13 @@ export async function POST(req: NextRequest) {
       base_bid: String(existing?.bid_amount ?? 0),
       charge: String(charge), // what the payer actually pays
     };
+    // DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api):
+    // pass the SDK's first-party cookies as checkout metadata; DataFast
+    // attributes the payment automatically — no webhook needed.
+    const dfVisitor = req.cookies.get("datafast_visitor_id")?.value;
+    const dfSession = req.cookies.get("datafast_session_id")?.value;
+    if (dfVisitor) metadata.datafast_visitor_id = dfVisitor;
+    if (dfSession) metadata.datafast_session_id = dfSession;
     if (description) metadata.description = description.slice(0, 480);
     if (image) metadata.image_url = image.slice(0, 480);
     const checkout = await polar.checkouts.create({

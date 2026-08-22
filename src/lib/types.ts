@@ -36,6 +36,7 @@ export type SiteStats = {
   highestBid: number;
   highestBidder: string | null;
   launchedAt: string; // ISO
+  statsSource?: "datafast" | "internal"; // which analytics the numbers come from
 };
 
 export type LeaderboardPage = {

@@ -46,11 +46,21 @@ json() {
 echo "── outbidarabs smoke · $BASE ─────────────────────────────"
 
 # ── 1. Home page renders ───────────────────────────────────
+# EXPECT_SIDE_CARDS=1 inverts the trending/activity check (for when
+# NEXT_PUBLIC_SHOW_TRENDING_ACTIVITY=true deployments are verified).
+EXPECT_SIDE_CARDS="${EXPECT_SIDE_CARDS:-0}"
+
 echo "1) Home page"
 HTML=$(curl -sL --max-time 20 "$BASE/" || echo "")
 check "home page returns HTML" $([ -n "$HTML" ] && echo 0 || echo 1)
 check "claim form present" $(echo "$HTML" | grep -qE "احصل على المركز الأول|Claim #1 for" && echo 0 || echo 1)
-check "earnings card present" $(echo "$HTML" | grep -qE "المشروع الجانبي|simple side project" && echo 0 || echo 1)
+check "earnings card present" $(echo "$HTML" | grep -qE "العرب للـ Outbid|Arab outbid board" && echo 0 || echo 1)
+check "no 'no ads' copy anywhere" $(echo "$HTML" | grep -qiE 'no ads|لا إعلانات' && echo 1 || echo 0)
+if [ "$EXPECT_SIDE_CARDS" = "1" ]; then
+  check "trending/activity cards present" $(echo "$HTML" | grep -qE "الأكثر رواجاً الآن|Trending right now" && echo 0 || echo 1)
+else
+  check "trending/activity cards hidden" $(echo "$HTML" | grep -qE "الأكثر رواجاً الآن|Trending right now" && echo 1 || echo 0)
+fi
 
 # ── 2. Board & stats API ───────────────────────────────────
 echo "2) Board & stats API"
@@ -59,6 +69,7 @@ TOTAL=$(echo "$BOARD" | json "j.listings.length")
 check "board returns listings" $([ -n "$TOTAL" ] && [ "$TOTAL" != "ERR" ] && [ "$TOTAL" -gt 0 ] 2>/dev/null && echo 0 || echo 1)
 STATS=$(curl -s --max-time 20 "$BASE/api/stats" || echo "")
 check "stats include launchedAt" $(echo "$STATS" | grep -q "launchedAt" && echo 0 || echo 1)
+check "stats include statsSource" $(echo "$STATS" | grep -q '"statsSource":"datafast"\|"statsSource":"internal"' && echo 0 || echo 1)
 TOPBID=$(echo "$STATS" | json "j.highestBid")
 check "highestBid > 0" $([ -n "$TOPBID" ] && [ "$TOPBID" != "ERR" ] && [ "$TOPBID" -gt 0 ] 2>/dev/null && echo 0 || echo 1)
 
@@ -135,6 +146,24 @@ fi
 R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
   -d '{"identity":"https://t.me/somegroup","amount":10}')
 check "checkout rejects t.me" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
+
+# Illegal content (drugs / gambling) — rejected with the illegal-content reason.
+post_checkout() { # $1 identity, $2 amount
+  curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "$(printf '{"identity":"%s","amount":%s}' "$1" "$2")"
+}
+for IDENT in "https://buy-cocaine-online$TS.example.com" "https://play-casino-bonus$TS.example.com" "https://bet365.com" "https://mobile.bet365.com"; do
+  R=$(post_checkout "$IDENT" 10)
+  check "rejects illegal: $IDENT" $(echo "$R" | grep -q 'غير القانوني\|Illegal content' && echo 0 || echo 1)
+done
+# Arabic path, percent-encoded exactly like a real browser submission
+R=$(post_checkout "https://example.com/%D9%85%D8%B1%D8%A7%D9%87%D9%86%D8%A7%D8%AA" 10)
+check "rejects illegal (arabic path)" $(echo "$R" | grep -q 'غير القانوني\|Illegal content' && echo 0 || echo 1)
+# Controls that must still pass (gambling keyword FP guards)
+R=$(post_checkout "https://betterhelp$TS.example.com" 6)
+check "betterhelp-style host allowed" $(echo "$R" | grep -q '"url"\|polar' && echo 0 || echo 1)
+R=$(post_checkout "https://slots-calendar$TS.example.com" 6)
+check "slots-calendar-style host allowed" $(echo "$R" | grep -q '"url"\|polar' && echo 0 || echo 1)
 
 R=$(curl -s --max-time 20 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
   -d "{\"identity\":\"https://about.me/smoke$TS\",\"amount\":6}")

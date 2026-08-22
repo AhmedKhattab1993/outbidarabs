@@ -23,7 +23,13 @@ type InitialData = {
   topUrl: string | null;
 };
 
-export function HomeClient({ initial }: { initial: InitialData }) {
+export function HomeClient({
+  initial,
+  showSideCards = false,
+}: {
+  initial: InitialData;
+  showSideCards?: boolean;
+}) {
   const { t } = useLang();
   const [board, setBoard] = useState(initial.board);
   const [trending, setTrending] = useState(initial.trending);
@@ -33,24 +39,29 @@ export function HomeClient({ initial }: { initial: InitialData }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [bRes, tRes, aRes, sRes] = await Promise.all([
+      const [bRes, sRes, tRes, aRes] = await Promise.all([
         fetch(`/api/board?page=${initial.page}`, { cache: "no-store" }),
-        fetch("/api/board?section=trending", { cache: "no-store" }),
-        fetch("/api/board?section=activity", { cache: "no-store" }),
         fetch("/api/stats", { cache: "no-store" }),
+        // side cards hidden → skip their fetches entirely
+        showSideCards ? fetch("/api/board?section=trending", { cache: "no-store" }) : null,
+        showSideCards ? fetch("/api/board?section=activity", { cache: "no-store" }) : null,
       ]);
       const b = await bRes.json();
-      const tr = await tRes.json();
-      const ac = await aRes.json();
       const st = await sRes.json();
       if (b.listings) setBoard(b);
-      if (tr.items) setTrending(tr.items);
-      if (ac.items) setActivity(ac.items);
       if (st && typeof st === "object") setStats((prev) => ({ ...prev, ...st }));
+      if (tRes) {
+        const tr = await tRes.json();
+        if (tr.items) setTrending(tr.items);
+      }
+      if (aRes) {
+        const ac = await aRes.json();
+        if (ac.items) setActivity(ac.items);
+      }
     } catch {
       /* offline — keep current data */
     }
-  }, [initial.page]);
+  }, [initial.page, showSideCards]);
 
   // Debounced refresh wrapper (realtime events can arrive in bursts).
   const refreshDebounced = useCallback(() => {
@@ -99,10 +110,12 @@ export function HomeClient({ initial }: { initial: InitialData }) {
         <div className="flex flex-col gap-6">
           <ClaimForm topBid={board.topBid} topUrl={initial.topUrl} />
           <div>
-            <div className="mb-6 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
-              <TrendingCard items={trending} />
-              <ActivityCard items={activity} />
-            </div>
+            {showSideCards && (
+              <div className="mb-6 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
+                <TrendingCard items={trending} />
+                <ActivityCard items={activity} />
+              </div>
+            )}
             <div id="leaderboard" className="scroll-mt-6">
               <div>
                 {board.listings.map((listing: Listing, i: number) => {

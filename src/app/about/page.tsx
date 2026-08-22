@@ -6,8 +6,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "عن المنصة — outbidarabs.lol",
-  description:
-    "أول منصة عربية للـ Outbid. لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح — الترتيب هو السعر.",
+  description: "أول منصة عربية للـ Outbid — مستوحاة من outbid.lol. الترتيب هو السعر.",
 };
 
 export default async function AboutPage() {

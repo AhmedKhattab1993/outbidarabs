@@ -2,9 +2,10 @@
 
 أول منصة عربية للـ Outbid — ادفع أقل من المنافس وارفع للترتيب الأول.
 
-An Arab-world clone of [outbid.lol](https://outbid.lol): a live, public pay-to-rank
-leaderboard. Anyone can list a website, X handle, app or product and pay to climb.
-Higher bid = higher rank. No ads, no accounts, no revenue share. Pure competition + FOMO.
+Inspired by [outbid.lol](https://outbid.lol) — the Arab-world edition of the live,
+public pay-to-rank leaderboard. Anyone can list a website, X handle, app or product
+and pay to climb. Higher bid = higher rank. No accounts, no revenue share. Pure
+competition + FOMO.
 
 ## Stack
 
@@ -292,15 +293,20 @@ Add all env vars from `.env.example` in the project settings and point
 - Platform links (App Store / Play Store / GitHub) keyed by path; the Play
   Store `id` param is part of the key so different apps don't share a bid
 - Tracking/affiliate params stripped from listings **and** click-throughs
-- Forbidden: chat & invite links (Telegram/WhatsApp/Discord/…), NSFW, shorteners
+- Forbidden: chat & invite links (Telegram/WhatsApp/Discord/…), NSFW, shorteners,
+  and illegal content — drugs, gambling/betting (including major operators via a
+  brand-host denylist), weapons, counterfeit, fraud, stolen accounts — regardless
+  of licensing; manual takedown via `listings.is_active = false` is the backstop
 - Webhook applies are idempotent (`processed_checkouts`); every successful
   payment appends to `activity` and adds its paid delta to `total_revenue`
   (the earnings-card number)
+- Polar checkouts carry `datafast_visitor_id`/`datafast_session_id` metadata for
+  DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api)
 
 ## Parity with the reference
 
 - 50 rows per page + "1–50 of N" count + ↻ Refresh
-- Earnings card ("This simple side project made $X since its launch…")
+- Earnings card ("The Arab outbid board has made $X since its launch…")
 - Real logos: og:image captured at submission → favicon → letter fallback
 - Clicks redirect through `/go/[id]` with `utm_source=outbidarabs` appended
 - Live "online" counter via presence heartbeats (75s window)
@@ -312,6 +318,15 @@ Add all env vars from `.env.example` in the project settings and point
   Checkout only charges the $N difference.", the button relabels to
   "Pay $N more" and the headline becomes "Raise to #1 for"
 - #1 hover pill: top + $5; all other ranks: bid + $1
+
+## Feature flags
+
+- `NEXT_PUBLIC_SHOW_TRENDING_ACTIVITY=true` — re-enables the Trending / Latest
+  activity side cards (hidden at launch; implementation + click tracking stay
+  live so the cards return with history). Verify with
+  `EXPECT_SIDE_CARDS=1 bash scripts/smoke.sh <url>`.
+- `/api/stats` exposes `statsSource` (`datafast` | `internal`) — which analytics
+  provider the online/visitors numbers come from.
 
 ## Project layout
 

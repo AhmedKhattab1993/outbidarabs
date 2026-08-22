@@ -5,6 +5,9 @@ export const dynamic = "force-dynamic";
 
 // Presence heartbeat from the online pill (every ~30s per browser session).
 // `count: true` on the first beat of a session also counts a new visitor.
+// Online/visitors prefer DataFast (statsSource "datafast") so the pill always
+// mirrors the public DataFast dashboard; our own counters are the fallback and
+// the heartbeat still runs to keep that fallback warm.
 export async function POST(req: NextRequest) {
   let body: { sid?: string; count?: boolean } = {};
   try {
@@ -16,5 +19,9 @@ export async function POST(req: NextRequest) {
   const online = sid ? await heartbeat(sid) : 0;
   if (body.count) await bumpVisitors();
   const stats = await getStats();
-  return NextResponse.json({ online, visitors: stats.visitors });
+  return NextResponse.json({
+    online: stats.statsSource === "datafast" && stats.online != null ? stats.online : online,
+    visitors: stats.visitors,
+    statsSource: stats.statsSource ?? "internal",
+  });
 }

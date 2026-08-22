@@ -24,7 +24,7 @@ export default function AboutPage() {
             {ar ? (
               <>
                 <p>
-                  بدأت <span className="font-semibold text-foreground">outbidsarabs.lol</span> كمشروع
+                  بدأت <span className="font-semibold text-foreground">outbidarabs.lol</span> كمشروع
                   جانبي بسيط: لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح. زايد منافسيك فقط لتصل إلى
                   القمة — هذا كل شيء.
                 </p>
@@ -40,7 +40,7 @@ export default function AboutPage() {
             ) : (
               <>
                 <p>
-                  <span className="font-semibold text-foreground">outbidsarabs.lol</span> started as a
+                  <span className="font-semibold text-foreground">outbidarabs.lol</span> started as a
                   simple side project: no ads, no API keys, no revenue sharing. Just outbid your
                   competitors to rank #1 — that&apos;s it.
                 </p>

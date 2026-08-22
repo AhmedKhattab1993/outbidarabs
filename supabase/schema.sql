@@ -1,4 +1,4 @@
--- outbidsarabs.lol — Supabase schema
+-- outbidarabs.lol — Supabase schema
 create extension if not exists "pgcrypto";
 
 -- ── Listings ──────────────────────────────────────────────

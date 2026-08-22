@@ -2,7 +2,7 @@ export type Lang = "ar" | "en";
 
 export const dict = {
   ar: {
-    siteName: "outbidsarabs",
+    siteName: "outbidarabs",
     tld: ".lol",
     navLeaderboard: "المتصدرين",
     navAbout: "عن المنصة",
@@ -37,7 +37,7 @@ export const dict = {
     // rules page
     rulesTitle: "القواعد",
     rulesIntro:
-      "OutbidsArabs لوحة تصدر علنية. لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح. تدفع لكي تقف فوق الجميع. الترتيب هو السعر — لا شيء غير ذلك.",
+      "OutbidArabs لوحة تصدر علنية. لا إعلانات، لا مفاتيح API، ولا مشاركة أرباح. تدفع لكي تقف فوق الجميع. الترتيب هو السعر — لا شيء غير ذلك.",
     rulesRankingTitle: "كيف يعمل الترتيب",
     rulesRanking1: "القوائم الجديدة بعملات دولارات كاملة،",
     rulesRankingMin: "الحد الأدنى",
@@ -71,7 +71,7 @@ export const dict = {
     inspiredBy: "مستوحاة من outbid.lol",
   },
   en: {
-    siteName: "outbidsarabs",
+    siteName: "outbidarabs",
     tld: ".lol",
     navLeaderboard: "Leaderboard",
     navAbout: "About",
@@ -103,7 +103,7 @@ export const dict = {
     top: "Top",
     rulesTitle: "Rules",
     rulesIntro:
-      "OutbidsArabs is a public leaderboard. There are no ads, no API keys, and no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
+      "OutbidArabs is a public leaderboard. There are no ads, no API keys, and no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
     rulesRankingTitle: "How ranking works",
     rulesRanking1: "New listings are whole US dollars,",
     rulesRankingMin: "$5 minimum",

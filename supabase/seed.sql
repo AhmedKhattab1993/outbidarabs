@@ -1,4 +1,4 @@
--- outbidsarabs.lol — seed data (Arab-world listings, prices in whole USD)
+-- outbidarabs.lol — seed data (Arab-world listings, prices in whole USD)
 -- Safe to run repeatedly: rows are inserted only when the url is absent.
 
 insert into listings (url, display_name, description, bid_amount, clicks, created_at, last_bid_at) values

@@ -20,11 +20,11 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "outbidsarabs.lol",
+  title: "outbidarabs.lol",
   description:
     "أول منصة عربية للـ Outbid — ادفع أقل من المنافس وارفع للترتيب الأول. No ads, no API keys, no revenue sharing. Just outbid your competition.",
   openGraph: {
-    title: "outbidsarabs.lol",
+    title: "outbidarabs.lol",
     description:
       "No ads, no API keys, no revenue sharing. Just outbid your competition to get to the top. Will you take #1 when this site goes viral?",
     type: "website",

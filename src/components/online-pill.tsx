@@ -16,7 +16,7 @@ export function OnlinePill({
 
   useEffect(() => {
     // Count this visit once per session
-    const key = "visited-outbidsarabs";
+    const key = "visited-outbidarabs";
     if (!sessionStorage.getItem(key)) {
       sessionStorage.setItem(key, "1");
       fetch("/api/visit", { method: "POST" }).catch(() => {});

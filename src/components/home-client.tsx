@@ -73,7 +73,7 @@ export function HomeClient({ initial }: { initial: InitialData }) {
       <SiteHeader />
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 pt-4 pb-16">
         <header className="mb-6 text-center">
-          <h1 className="sr-only">outbidsarabs.lol</h1>
+          <h1 className="sr-only">outbidarabs.lol</h1>
           <OnlinePill initialOnline={initial.stats.online} initialVisitors={initial.stats.visitors} />
         </header>
         <div className="flex flex-col gap-6">

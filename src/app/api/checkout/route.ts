@@ -15,7 +15,7 @@ async function fetchDescription(href: string): Promise<string | null> {
     const timer = setTimeout(() => ctrl.abort(), 2500);
     const res = await fetch(href, {
       signal: ctrl.signal,
-      headers: { "user-agent": "Mozilla/5.0 (compatible; outbidsarabs/1.0)" },
+      headers: { "user-agent": "Mozilla/5.0 (compatible; outbidarabs/1.0)" },
     });
     clearTimeout(timer);
     if (!res.ok) return null;

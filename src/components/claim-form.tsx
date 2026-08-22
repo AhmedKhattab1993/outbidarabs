@@ -33,8 +33,8 @@ export function ClaimForm({ topBid }: { topBid: number }) {
       document.getElementById("claim")?.scrollIntoView({ behavior: "smooth", block: "center" });
       inputRef.current?.focus();
     };
-    window.addEventListener("outbidsarabs:claim", onClaim);
-    return () => window.removeEventListener("outbidsarabs:claim", onClaim);
+    window.addEventListener("outbidarabs:claim", onClaim);
+    return () => window.removeEventListener("outbidarabs:claim", onClaim);
   }, []);
 
   const clamp = useCallback((n: number) => Math.min(MAX_BID, Math.max(MIN_BID, n)), []);

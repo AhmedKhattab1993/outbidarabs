@@ -21,7 +21,7 @@ export function ListingRow({
   const claimPrice = listing.bid_amount + 1;
   const claim = () =>
     window.dispatchEvent(
-      new CustomEvent("outbidsarabs:claim", { detail: { amount: claimPrice } })
+      new CustomEvent("outbidarabs:claim", { detail: { amount: claimPrice } })
     );
 
   return (

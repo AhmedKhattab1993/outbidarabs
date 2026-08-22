@@ -1,4 +1,4 @@
-# outbidsarabs.lol
+# outbidarabs.lol
 
 أول منصة عربية للـ Outbid — ادفع أقل من المنافس وارفع للترتيب الأول.
 

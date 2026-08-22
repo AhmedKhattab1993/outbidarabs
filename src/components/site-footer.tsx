@@ -12,9 +12,9 @@ export function SiteFooter() {
           target="_blank"
           rel="noopener"
           className="text-primary transition-colors hover:text-primary/80"
-          href="https://x.com/outbidsarabs"
+          href="https://x.com/outbidarabs"
         >
-          @outbidsarabs
+          @outbidarabs
         </a>{" "}
         · {t.inspiredBy} ·{" "}
         <a className="text-primary transition-colors hover:text-primary/80" href="/rules">

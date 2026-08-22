@@ -101,6 +101,24 @@ export function ListingRow({
             </p>
           </div>
         </a>
+        {/* Touch claim action: the hover pill below needs a pointer, so on
+            touch screens this quiet inline row is the visible affordance. */}
+        <button
+          type="button"
+          onClick={claim}
+          className="-mt-1 mb-1 flex min-h-10 w-fit cursor-pointer items-center gap-1 rounded-full ps-3 text-[11px] font-bold text-primary transition-colors hover:bg-primary/10 md:hidden"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-3 shrink-0">
+            <path
+              d="M12 19V5M5 12l7-7 7 7"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {t.claimShort} {formatUsd(claimPrice)}
+        </button>
         <button
           type="button"
           onClick={claim}

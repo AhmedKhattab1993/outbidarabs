@@ -40,6 +40,7 @@ export const dict = {
     justNow: "الآن",
     clicks: (n: string) => `${n} نقرة`,
     claimRankFor: "احصل على هذا المركز مقابل",
+    claimShort: "احصل عليه بـ",
     top: "الأفضل",
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} من ${total.toLocaleString("en-US")}`,
@@ -125,6 +126,7 @@ export const dict = {
     justNow: "just now",
     clicks: (n: string) => `${n} clicks`,
     claimRankFor: "claim this rank for",
+    claimShort: "claim for",
     top: "Top",
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,

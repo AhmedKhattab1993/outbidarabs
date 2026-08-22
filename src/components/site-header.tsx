@@ -23,9 +23,12 @@ export function SiteHeader() {
 
   return (
     <header className="w-full">
-      <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-4 pt-5 pb-4">
+      {/* Mobile (<sm): the nav wraps to a centered second row so logo +
+          lang/theme buttons fit without horizontal overflow. Desktop is a
+          single row: logo left, nav + buttons grouped right. */}
+      <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pt-4 pb-3 sm:flex-nowrap sm:justify-start sm:gap-x-4 sm:pt-5 sm:pb-4">
         <a
-          className="inline-flex items-center gap-1.5 font-medium tracking-[-0.04em] text-[22px]"
+          className="inline-flex shrink-0 items-center gap-1.5 font-medium tracking-[-0.04em] text-[22px]"
           href="/"
         >
           <svg viewBox="0 0 36 28" fill="none" aria-hidden="true" className="w-auto h-5">
@@ -38,30 +41,12 @@ export function SiteHeader() {
             <span className="text-primary">.</span>lol
           </span>
         </a>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <nav aria-label="Main">
-            <ul className="flex items-center gap-4 text-sm sm:gap-5">
-              {links.map((l) => (
-                <li key={l.href}>
-                  <Link
-                    aria-current={pathname === l.href ? "page" : undefined}
-                    className={
-                      "font-medium transition-colors hover:text-foreground " +
-                      (pathname === l.href ? "text-foreground" : "text-muted-foreground")
-                    }
-                    href={l.href}
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+        <div className="order-2 flex items-center gap-2 sm:order-3 sm:gap-3">
           <button
             type="button"
             onClick={toggleLang}
             aria-label={lang === "ar" ? "Switch to English" : "التبديل إلى العربية"}
-            className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent text-sm font-bold transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50"
+            className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent text-sm font-bold transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50"
           >
             {lang === "ar" ? "EN" : "ع"}
           </button>
@@ -69,7 +54,7 @@ export function SiteHeader() {
             type="button"
             onClick={() => setTheme(isDark ? "light" : "dark")}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50"
+            className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-transparent transition-all outline-none select-none hover:bg-muted hover:text-foreground dark:hover:bg-muted/50"
           >
             {mounted && (
               <svg
@@ -97,6 +82,24 @@ export function SiteHeader() {
             )}
           </button>
         </div>
+        <nav aria-label="Main" className="order-3 w-full sm:order-2 sm:ml-auto sm:w-auto">
+          <ul className="flex items-center justify-center gap-5 text-sm sm:justify-start sm:gap-5">
+            {links.map((l) => (
+              <li key={l.href}>
+                <Link
+                  aria-current={pathname === l.href ? "page" : undefined}
+                  className={
+                    "inline-flex min-h-10 items-center px-1 font-medium transition-colors hover:text-foreground " +
+                    (pathname === l.href ? "text-foreground" : "text-muted-foreground")
+                  }
+                  href={l.href}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
     </header>
   );

@@ -86,6 +86,13 @@ body {
   color: var(--foreground);
 }
 
+/* Mobile guard: nothing should ever widen the page past the viewport (the
+   header previously did). `clip` avoids creating a scroll container, so
+   sticky/absolute positioning inside is unaffected. */
+html {
+  overflow-x: clip;
+}
+
 /* Arabic-first typography: swap in an Arabic-capable font while keeping
    DM Sans for Latin glyphs. */
 html[lang="ar"] body {

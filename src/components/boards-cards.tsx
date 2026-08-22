@@ -10,16 +10,16 @@ function ShowMore({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <div className={open ? "" : "max-h-16 overflow-hidden md:max-h-none md:overflow-visible"}>
+      <div className={open ? "" : "max-h-20 overflow-hidden md:max-h-none md:overflow-visible"}>
         {children}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-11 items-end justify-center pb-1 md:hidden">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-end justify-center pb-1 md:hidden">
         {!open && <div className="absolute inset-0 bg-gradient-to-t from-card from-20% via-card/80 to-transparent" />}
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="pointer-events-auto relative z-10 inline-flex h-6 items-center justify-center gap-1 rounded-full border border-border bg-card px-2 text-xs font-bold transition-colors hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+          className="pointer-events-auto relative z-10 inline-flex size-10 items-center justify-center gap-1 rounded-full border border-border bg-card text-base font-bold transition-colors hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
         >
           {open ? "−" : "+"}
         </button>
@@ -42,7 +42,7 @@ export function TrendingCard({ items }: { items: TrendingItem[] }) {
                   href={`/go/${item.id}`}
                   target="_blank"
                   rel="sponsored noopener noreferrer"
-                  className="flex items-center gap-2 py-1.5 text-xs"
+                  className="flex min-h-10 items-center gap-2 py-2 text-xs"
                 >
                   <Avatar name={item.display_name} url={item.url} className="size-5 text-[10px]" />
                   <p dir="auto" className="min-w-0 flex-1 truncate font-semibold">{item.display_name}</p>
@@ -75,7 +75,7 @@ export function ActivityCard({ items }: { items: ActivityItem[] }) {
           <ul className="flex flex-1 flex-col">
             {items.map((item, i) => (
               <li key={item.id} className={i === 0 ? "" : "border-t"}>
-                <span className="flex items-center gap-2 py-1.5 text-xs">
+                <span className="flex min-h-10 items-center gap-2 py-2 text-xs">
                   <Avatar name={item.display_name} url={item.target_url} src={item.image_url} className="size-5 text-[10px]" />
                   <p dir="auto" className="min-w-0 flex-1 truncate">
                     <span className="font-semibold">{item.display_name}</span>{" "}

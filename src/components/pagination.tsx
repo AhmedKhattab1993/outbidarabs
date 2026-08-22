@@ -43,13 +43,13 @@ export function Pagination({
 
   return (
     <nav aria-label={t.navLeaderboard} className="mt-5 flex flex-col items-center gap-2">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:gap-x-4">
         <button
           type="button"
           aria-label="Previous page"
           disabled={page <= 1}
           onClick={() => go(page - 1)}
-          className="flex size-8 cursor-pointer items-center justify-center text-primary transition-colors hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:text-muted-foreground/40"
+          className="flex size-10 cursor-pointer items-center justify-center text-primary transition-colors hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:text-muted-foreground/40"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-5 rtl:-scale-x-100">
             <path
@@ -63,7 +63,7 @@ export function Pagination({
         </button>
         {pages.map((p, i) =>
           p === "…" ? (
-            <span key={`e${i}`} className="flex size-8 items-center justify-center text-sm text-muted-foreground" aria-hidden="true">
+            <span key={`e${i}`} className="flex size-10 items-center justify-center text-sm text-muted-foreground" aria-hidden="true">
               …
             </span>
           ) : (
@@ -74,7 +74,7 @@ export function Pagination({
               aria-current={p === page ? "page" : undefined}
               onClick={() => go(p)}
               className={
-                "flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-full px-1.5 text-sm font-medium tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none " +
+                "flex h-10 min-w-10 cursor-pointer items-center justify-center rounded-full px-1.5 text-sm font-medium tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none " +
                 (p === page
                   ? "bg-primary text-primary-foreground"
                   : "text-primary hover:bg-primary/10")
@@ -89,7 +89,7 @@ export function Pagination({
           aria-label="Next page"
           disabled={page >= totalPages}
           onClick={() => go(page + 1)}
-          className="flex size-8 cursor-pointer items-center justify-center text-primary transition-colors hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:text-muted-foreground/40"
+          className="flex size-10 cursor-pointer items-center justify-center text-primary transition-colors hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:text-muted-foreground/40"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-5 rtl:-scale-x-100">
             <path
@@ -111,7 +111,7 @@ export function Pagination({
         <button
           type="button"
           onClick={onRefresh}
-          className="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+          className="mt-1 inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
         >
           <svg
             viewBox="0 0 24 24"

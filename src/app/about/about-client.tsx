@@ -86,7 +86,10 @@ export function AboutClient({ stats }: { stats: SiteStats }) {
               </>
             )}
             <p className="text-sm">
-              {t.sinceItsLaunch} {durationSince(stats.launchedAt, t)} · {t.inspiredBy}
+              {lang === "ar"
+                ? `${t.sinceItsLaunch} ${durationSince(stats.launchedAt, t)}`
+                : `${durationSince(stats.launchedAt, t)} ${t.sinceItsLaunch}`}{" "}
+              · {t.inspiredBy}
             </p>
           </div>
         </div>

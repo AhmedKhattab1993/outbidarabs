@@ -380,8 +380,8 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
           </div>
         )}
 
-        {/* ── Bid amount + CTA ── */}
-        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
+        {/* ── Bid amount + CTA (centered under the input, matching the form) ── */}
+        <div className="flex flex-col items-stretch justify-center gap-2 md:flex-row md:items-center">
           <div className="flex items-center justify-center gap-2">
             <button
               type="button"

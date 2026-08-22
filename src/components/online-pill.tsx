@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang-context";
 
+// Public analytics dashboard (parity with the reference's "see stats →").
+// Falls back to /about when not configured.
+export const ANALYTICS_URL = process.env.NEXT_PUBLIC_ANALYTICS_URL || "";
+
 function sessionId(): string {
   try {
     let sid = sessionStorage.getItem("outbidarabs-sid");
@@ -57,10 +61,10 @@ export function OnlinePill({
 
   return (
     <a
-      target="_blank"
-      rel="noopener"
+      target={ANALYTICS_URL ? "_blank" : undefined}
+      rel={ANALYTICS_URL ? "noopener" : undefined}
       className="inline-block max-w-full rounded-full bg-muted px-3 py-1.5 text-center text-sm text-balance text-muted-foreground transition-colors hover:text-foreground"
-      href="/about"
+      href={ANALYTICS_URL || "/about"}
     >
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span className="relative inline-flex size-2 shrink-0">

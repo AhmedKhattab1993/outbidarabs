@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { DM_Sans, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies } from "next/headers";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -31,6 +32,12 @@ export const metadata: Metadata = {
   },
 };
 
+// Analytics (DataFast / Vemetric / any provider): set the script URL and
+// site id from the provider's embed snippet; NEXT_PUBLIC_ANALYTICS_URL is
+// the public dashboard linked from "see stats →" and the footer.
+const ANALYTICS_SCRIPT_URL = process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL;
+const ANALYTICS_SITE_ID = process.env.NEXT_PUBLIC_ANALYTICS_SITE_ID;
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -43,6 +50,13 @@ export default async function RootLayout({
       <body
         className={`${dmSans.variable} ${plexArabic.variable} min-h-full flex flex-col font-sans`}
       >
+        {ANALYTICS_SCRIPT_URL && (
+          <Script
+            src={ANALYTICS_SCRIPT_URL}
+            strategy="afterInteractive"
+            data-site-id={ANALYTICS_SITE_ID || undefined}
+          />
+        )}
         <ThemeProvider>
           <LangProvider initialLang={lang}>{children}</LangProvider>
         </ThemeProvider>

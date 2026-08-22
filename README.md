@@ -286,6 +286,10 @@ Add all env vars from `.env.example` in the project settings and point
 - Real logos: og:image captured at submission → favicon → letter fallback
 - Clicks redirect through `/go/[id]` with `utm_source=outbidarabs` appended
 - Live "online" counter via presence heartbeats (75s window)
+- Public analytics dashboard: `see stats →` pill + footer `Live stats` link to
+  `NEXT_PUBLIC_ANALYTICS_URL` (reference uses Vemetric public dashboards);
+  provider script injected via `NEXT_PUBLIC_ANALYTICS_SCRIPT_URL` +
+  `NEXT_PUBLIC_ANALYTICS_SITE_ID` (DataFast, Vemetric, Plausible — any)
 - Claim-form UX: typing an existing URL shows "Already on the board at $X.
   Checkout only charges the $N difference.", the button relabels to
   "Pay $N more" and the headline becomes "Raise to #1 for"

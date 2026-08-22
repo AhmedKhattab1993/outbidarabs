@@ -1,9 +1,11 @@
 "use client";
 
 import { useLang } from "@/lib/lang-context";
+import { ANALYTICS_URL } from "@/components/online-pill";
 
 export function SiteFooter() {
   const { t } = useLang();
+  const statsHref = ANALYTICS_URL || "/about";
   return (
     <footer className="mt-16 pb-8 text-center">
       <p className="text-sm text-muted-foreground">
@@ -21,7 +23,12 @@ export function SiteFooter() {
           {t.footerRules}
         </a>{" "}
         ·{" "}
-        <a className="text-primary transition-colors hover:text-primary/80" href="/about">
+        <a
+          target={ANALYTICS_URL ? "_blank" : undefined}
+          rel={ANALYTICS_URL ? "noopener" : undefined}
+          className="text-primary transition-colors hover:text-primary/80"
+          href={statsHref}
+        >
           {t.footerLiveStats}
         </a>
       </p>

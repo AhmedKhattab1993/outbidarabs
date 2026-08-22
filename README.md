@@ -1,11 +1,13 @@
 # outbidarabs.lol
 
-أول منصة عربية للـ Outbid — ادفع أقل من المنافس وارفع للترتيب الأول.
+رتب حسابك على إنستجرام أو تيك توك — أعلى عرض = المركز الأول.
 
-Inspired by [outbid.lol](https://outbid.lol) — the Arab-world edition of the live,
-public pay-to-rank leaderboard. Anyone can list a website, X handle, app or product
-and pay to climb. Higher bid = higher rank. No accounts, no revenue share. Pure
-competition + FOMO.
+The Arab-world, platform-focused pay-to-rank leaderboard. Instagram and
+TikTok profiles first; X, LinkedIn, websites and mobile apps supported too.
+Anyone can list an account or product and pay to climb. Highest total bid =
+highest rank. New listings start at $1; raising an existing listing costs only
+the difference. Inspired by [outbid.lol](https://outbid.lol) — this edition is
+built for the Arab market and focused on social media accounts.
 
 ## Stack
 
@@ -206,14 +208,19 @@ bash scripts/smoke.sh https://<preview>.vercel.app # layer 4
 bash scripts/smoke.sh https://outbidarabs.lol     # layer 5, after every prod deploy
 ```
 
-It checks (18 checks, exit 0 = pass):
+It checks (38 checks, exit 0 = pass):
 
-1. Board renders: claim form + earnings card, 50/page listings, count line
-2. #1 window: bid at top+1 → rejected with the exact "To take #1, bid at least $X" message
-3. Current #1 self-raise allowed; existing raise ≤ current rejected
-4. Identity: `about.me` allowed, `t.me` rejected, two Play Store `id`s → two listings
-5. `/go/[id]` redirects with `?utm_source=outbidarabs`
-6. `/rules`, `/about` return 200
+1. Board renders: platform headline + filter pills + earnings card, listings
+   carry `platform`
+2. Platform filter: `?platform=instagram` returns only instagram listings
+3. Preview API: URL → platform detection, bare `@handle` → ambiguous with
+   candidates, platform hint resolves, post/short-link TikTok URLs rejected
+4. Rules engine: bid at top+1 → accepted at rank #1 (highest bid wins);
+   low bid accepted; raise accepted; raise ≤ current rejected
+5. Identity: `about.me` allowed, `t.me` rejected, illegal-content hosts/path
+   rejected (incl. Arabic paths), two Play Store `id`s → two listings
+6. `/go/[id]` redirects with `?utm_source=outbidarabs`
+7. `/rules`, `/about` return 200 + raise-by-difference + origin-note copy
 
 **Serverless caveat:** mock mode keeps state in the lambda's memory, so on
 Vercel each instance has its own board and stateful checks (raise/lookup) can
@@ -266,11 +273,12 @@ layer 3 and documented above — the script never calls Polar.
    **together** and redeploy; a mix of sandbox and production values fails
    either at checkout creation or at webhook validation.
 
-Flow: claim form → `POST /api/checkout` (validates identity, strips tracking
-params, enforces the #1 window, fetches og:description/og:image) → Polar-hosted
+Flow: claim form (single input, auto platform detection, smart-fetch preview
+with manual editing) → `POST /api/checkout` (validates identity, strips
+tracking params, accepts the edited title/description/image) → Polar-hosted
 checkout charging **the difference** for raises (full bid for new listings) →
-webhook `checkout.updated` (`confirmed`/`succeeded`, idempotent per checkout id) →
-listing created/raised → Realtime pushes the new board to every visitor.
+webhook `checkout.updated` (`confirmed`/`succeeded`, idempotent per checkout
+id) → listing created/raised → Realtime pushes the new board to every visitor.
 
 ### 3. Vercel
 
@@ -282,19 +290,21 @@ Add all env vars from `.env.example` in the project settings and point
 `NEXT_PUBLIC_SITE_URL` at the final domain. Optionally set
 `NEXT_PUBLIC_LAUNCH_DATE` (ISO) — it feeds the earnings card and About page.
 
-## Rules engine (mirrors outbid.lol exactly)
+## Rules engine (highest bid wins — per the product spec)
 
-- Whole dollars, **$1 minimum**, **$999,999 maximum**
-- **Taking #1 costs current top bid + $5** — bids inside the (top, top+5)
-  window are rejected: "To take #1, bid at least $X." The current #1 may
-  extend its own lead by any amount ≥ $1
-- Lower bids land at the rank they can reach; equal bids: the older bid keeps
-  the higher rank (`ORDER BY bid_amount DESC, last_bid_at ASC`)
-- Re-submitting the same URL/handle **raises** the bid — you pay **only the
-  difference** (+$1 minimum); the payment is applied race-safely (if the board
-  moved mid-checkout, your paid difference still buys exactly that raise)
-- Platform links (App Store / Play Store / GitHub) keyed by path; the Play
-  Store `id` param is part of the key so different apps don't share a bid
+- Whole dollars, **$1 minimum**, **$999,999 maximum** — new listings start at $1
+- **Ranking is determined only by total bid amount**: any bid above the current
+  top takes #1 (no artificial window)
+- Equal bids: the older bid keeps the higher rank (`ORDER BY bid_amount DESC, last_bid_at ASC`)
+- Re-submitting the same account/URL **raises** the bid — you pay **only the
+  difference** (+$1 minimum); the payment is applied race-safely
+- The board is **organized by platform** (Instagram | TikTok | X | LinkedIn |
+  Website | App) with filter pills; ranks are always the global rank
+- Platform canonicalization: instagram.com/`user`, tiktok.com/@`user`,
+  x.com/`user`, linkedin.com/in/`slug`, App Store/Play Store URLs keyed by path
+  (Play Store `id` param included), anything else = website
+- Bare `@handle` inputs are ambiguous → the form shows platform selector chips
+  (Instagram / TikTok / X, filtered by each platform's username rules)
 - Tracking/affiliate params stripped from listings **and** click-throughs
 - Forbidden: chat & invite links (Telegram/WhatsApp/Discord/…), NSFW, shorteners,
   and illegal content — drugs, gambling/betting (including major operators via a
@@ -306,21 +316,44 @@ Add all env vars from `.env.example` in the project settings and point
 - Polar checkouts carry `datafast_visitor_id`/`datafast_session_id` metadata for
   DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api)
 
+## Smart fetching (preview card)
+
+When an input is detected, `/api/preview` fetches public data for the card
+(best effort — never blocks, 4.5s timeout, 10-minute server cache, and the user
+can always edit title/description/image manually):
+
+| Platform | Source | Gets |
+|---|---|---|
+| Website | page OG tags | image, title, description (+ favicon fallback in UI) |
+| App (App Store) | iTunes Lookup API | icon, name, developer, description |
+| App (Play Store) | page OG tags | icon, name, description |
+| TikTok | tiktok.com oEmbed | nickname, avatar |
+| X | publish.twitter.com oEmbed | display name |
+| Instagram | web_profile_info + OG fallback (usually walled → clean fallback) | best effort |
+| LinkedIn | page OG tags (usually login-walled) | best effort |
+
+Failed/generic fetches return `meta: null` → the card falls back to the platform
+icon + handle with everything editable, exactly as the spec requires.
+
 ## Parity with the reference
 
 - 50 rows per page + "1–50 of N" count + ↻ Refresh
+- Platform filter pills (All | Instagram | TikTok | X | LinkedIn | Website | App)
+  + platform badge on every listing avatar
 - Earnings card ("The Arab outbid board has made $X since its launch…")
-- Real logos: og:image captured at submission → favicon → letter fallback
+- Real images: smart-fetch avatar/icon captured at submission (editable in the
+  preview card) → favicon → letter fallback
 - Clicks redirect through `/go/[id]` with `utm_source=outbidarabs` appended
 - Live "online" counter via presence heartbeats (75s window)
 - Public analytics dashboard: `see stats →` pill + footer `Live stats` link to
   `NEXT_PUBLIC_ANALYTICS_URL` (reference uses Vemetric public dashboards);
   provider script injected via `NEXT_PUBLIC_ANALYTICS_SCRIPT_URL` +
   `NEXT_PUBLIC_ANALYTICS_SITE_ID` (DataFast, Vemetric, Plausible — any)
-- Claim-form UX: typing an existing URL shows "Already on the board at $X.
-  Checkout only charges the $N difference.", the button relabels to
-  "Pay $N more" and the headline becomes "Raise to #1 for"
-- #1 hover pill: top + $5; all other ranks: bid + $1
+- Claim-form UX: detection → platform chips for ambiguous handles → preview
+  card with editable title/description/image + cleaned destination URL;
+  typing an existing account shows "Already on the board at $X. Checkout only
+  charges the $N difference.", the button relabels to "Pay $N more"
+- Claim price pill on every row: bid + $1 (any bid above the holder takes it)
 
 ## Feature flags
 
@@ -339,15 +372,18 @@ src/
     page.tsx                 # leaderboard homepage
     rules/ about/ success/   # static pages (server metadata + client inner)
     api/
-      checkout/              # validation + #1 window + Polar checkout (charges difference)
+      checkout/              # validation + Polar checkout (charges difference)
+      preview/               # platform detection + smart fetch + re-bid context
       webhooks/polar/        # payment → listing (idempotent, race-safe)
-      board/ stats/ visit/   # live data + presence heartbeat
+      board/ stats/ visit/   # live data (platform filters) + presence heartbeat
       lookup/                # existing-listing detection for the claim form
     go/[id]/                 # click tracking redirect (utm_source=outbidarabs)
   components/                # outbid.lol-style UI components
   lib/
     store.ts                 # Supabase + mock data layer + rules engine
-    identity.ts              # URL/@handle normalization & moderation
+    identity.ts              # platform detection & canonicalization, moderation
+    fetch-meta.ts            # smart fetching (OG / oEmbed / store APIs) + cache
+    platforms.ts             # platform model, labels, detection helpers
     i18n.ts                  # AR/EN dictionary + bid constants
 supabase/
   schema.sql seed.sql

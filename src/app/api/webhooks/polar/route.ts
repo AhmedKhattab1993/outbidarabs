@@ -54,13 +54,13 @@ export async function POST(req: Request) {
 
   const result = await applyPaidListing({
     url: identityUrl,
+    platform: (metadata.platform as any) ?? undefined,
     displayName: metadata.display_name ?? identityUrl,
     description: metadata.description || null,
     imageUrl: metadata.image_url || null,
     targetUrl: metadata.target_url || null,
     amount: effectiveAmount,
     orderId: payload?.id ?? `polar_${Date.now()}`,
-    skipWindowCheck: true, // payment already captured — apply, never reject
   });
 
   if (!result.ok) {

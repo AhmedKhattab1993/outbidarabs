@@ -2,9 +2,10 @@
 
 import type { Listing } from "@/lib/types";
 import { useLang } from "@/lib/lang-context";
-import { TOP1_STEP } from "@/lib/i18n";
-import { timeAgo, formatUsd, avatarInitial } from "@/lib/format";
+import { platformLabel } from "@/lib/platforms";
+import { timeAgo, formatUsd } from "@/lib/format";
 import { Avatar } from "@/components/avatar";
+import { PlatformBadge } from "@/components/platform-icon";
 
 export function ListingRow({
   listing,
@@ -14,14 +15,14 @@ export function ListingRow({
   separatorAfter,
 }: {
   listing: Listing;
-  rank: number;
+  rank: number; // global rank on the board
   isTop3: boolean;
   isTop10: boolean;
   separatorAfter?: { label: string; afterRank: number } | null;
 }) {
-  const { t } = useLang();
-  // Taking #1 costs the current top bid + $5; every other rank is +$1.
-  const claimPrice = rank === 1 ? listing.bid_amount + TOP1_STEP : listing.bid_amount + 1;
+  const { t, lang } = useLang();
+  // Any bid above the current holder takes the rank → claim price = bid + $1.
+  const claimPrice = listing.bid_amount + 1;
   const claim = () =>
     window.dispatchEvent(
       new CustomEvent("outbidarabs:claim", { detail: { amount: claimPrice } })
@@ -59,12 +60,21 @@ export function ListingRow({
                 #{rank}
               </span>
             )}
-            <Avatar
-              name={listing.display_name}
-              url={listing.target_url || listing.url}
-              src={listing.image_url}
-              className="size-10 bg-card text-sm shadow-sm ring-1 ring-black/5 md:size-14 md:text-lg dark:ring-white/10"
-            />
+            <span className="relative shrink-0">
+              <Avatar
+                name={listing.display_name}
+                url={listing.target_url || listing.url}
+                src={listing.image_url}
+                className="size-10 bg-card text-sm shadow-sm ring-1 ring-black/5 md:size-14 md:text-lg dark:ring-white/10"
+              />
+              <span className="absolute -bottom-0.5 -end-0.5 md:-bottom-1 md:-end-1">
+                <PlatformBadge
+                  platform={listing.platform}
+                  className="size-4 md:size-5"
+                  title={platformLabel(listing.platform, lang)}
+                />
+              </span>
+            </span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">

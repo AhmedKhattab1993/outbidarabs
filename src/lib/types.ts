@@ -1,8 +1,11 @@
+import type { Platform } from "@/lib/platforms";
+
 export type Listing = {
   id: string;
-  url: string; // canonical identity key (protocol + host + path, params stripped)
+  url: string; // canonical identity key (platform-canonical URL, params stripped)
+  platform: Platform;
   target_url?: string | null; // click-through href (params stripped, play-store id kept)
-  image_url?: string | null; // og:image captured at submission
+  image_url?: string | null; // fetched profile pic / app icon / og:image
   display_name: string;
   description: string | null;
   bid_amount: number;
@@ -41,7 +44,16 @@ export type SiteStats = {
 
 export type LeaderboardPage = {
   listings: Listing[];
+  ranks: number[]; // global rank of each listing (same order as listings)
   totalPages: number;
-  total: number;
-  topBid: number;
+  total: number; // listings in the current platform filter
+  totalAll: number; // listings on the whole board
+  topBid: number; // global top bid (claim context)
 };
+
+export type ExistingListing = {
+  url: string;
+  display_name: string;
+  bid_amount: number;
+  platform: Platform;
+} | null;

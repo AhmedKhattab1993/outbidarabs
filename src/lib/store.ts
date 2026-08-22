@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { ActivityItem, LeaderboardPage, Listing, SiteStats, TrendingItem } from "@/lib/types";
-import { MIN_BID, MAX_BID, TOP1_STEP, PER_PAGE, LAUNCH_ISO } from "@/lib/i18n";
+import { MIN_BID, MAX_BID, PER_PAGE, LAUNCH_ISO } from "@/lib/i18n";
 import { getDataFastStats } from "@/lib/datafast";
+import type { PlatformFilter, Platform } from "@/lib/platforms";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -34,31 +35,29 @@ type MockListing = Listing & { clicks_per_hour: number };
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-const SEED: Array<[string, string, string, number, number, number]> = [
-  // url, display, description, bid, clicks, clicks/h
-  ["https://joni.ai", "joni.ai", "JONI is your personal AI computer. Chat once and a team of AI agents and skills gets to work, with the right model picked for every job.", 14013, 853, 852],
-  ["https://outrank.so", "outrank.so", "Get traffic and outrank competitors with backlinks & SEO-optimized content while you sleep.", 13005, 6327, 4497],
-  ["https://orynth.dev", "orynth.dev", "Discover early-stage products, support their creators, and invest in their coins.", 12716, 10401, 659],
-  ["https://crowdreply.io", "crowdreply.io", "Get your brand added to the pages ChatGPT, Gemini, and Perplexity already cite.", 12711, 3714, 669],
-  ["https://trycomp.ai", "trycomp.ai", "Automate SOC 2, ISO 27001, HIPAA, and GDPR. Audit-ready in days.", 10000, 11225, 5474],
-  ["https://lathire.com", "lathire.com", "Hire vetted tech and generalist professionals in as little as 24 hours, for up to 80% less.", 3124, 2533, 244],
-  ["https://contentstudio.io", "contentstudio.io", "All-in-one social media management tool backed by AI.", 3123, 442, 96],
-  ["https://x.com/pumpfuncoin", "@pumpfuncoin on X", "PumpFunCoin", 3121, 1917, 130],
-  ["https://mytb.ai", "mytb.ai", "Automated, accurate, actionable bookkeeping for modern accounting firms.", 2999, 1130, 88],
-  ["https://namerockstar.com", "namerockstar.com", "Find original domains for your company and products.", 2001, 31, 4],
-  ["https://joinklover.com", "joinklover.com", "Cash advance of up to $750 in minutes.", 2000, 2135, 210],
-  ["https://affiliateo.com", "affiliateo.com", "Affiliate marketing platform for businesses and creators.", 1302, 50, 12],
-  ["https://myworkoutlogs.com", "myworkoutlogs.com", "A fast, private workout tracker. Free forever.", 1301, 809, 71],
-  ["https://reactbits.dev", "reactbits.dev", "134 animated React components, 238 page blocks, 300 app UI blocks.", 1300, 648, 51],
-  ["https://peptiprices.com", "peptiprices.com", "Compare research peptide prices across verified suppliers.", 1280, 810, 33],
-  ["https://maxbid.lol", "maxbid.lol", "Bid to the top.", 999, 5474, 420],
-  ["https://thehumanizeai.pro", "thehumanizeai.pro", "Make your AI text sound human.", 998, 4497, 380],
-  ["https://top3.lol", "top3.lol", "Only three spots.", 997, 669, 45],
-  ["https://laun.ch", "laun.ch", "Launch pages in minutes.", 30, 120, 9],
-  ["https://timebid.lol", "timebid.lol", "Time-based bidding experiment.", 6, 12, 1],
-  ["https://askai.free", "askai.free", "Ask AI anything, free.", 5, 8, 1],
-  ["https://tryslapback.com", "tryslapback.com", "Slapback your inbox.", 9, 45, 3],
-  ["https://folio.fyi", "folio.fyi", "Beautiful portfolio pages.", 7, 21, 2],
+// url, platform, display, description, bid, clicks, clicks/h
+const SEED: Array<[string, Platform, string, string, number, number, number]> = [
+  ["https://instagram.com/noor.cooks", "instagram", "@noor.cooks", "وصفات بيتية مصرية سهلة كل يوم", 8201, 853, 852],
+  ["https://instagram.com/omar.fits", "instagram", "@omar.fits", "تمارين بيتية بدون أجهزة — برنامجك في 20 دقيقة", 6104, 632, 497],
+  ["https://tiktok.com/@mona.makes", "tiktok", "@mona.makes", "شغلات يدوية وديكور بيديك", 5888, 10401, 659],
+  ["https://instagram.com/layan.art", "instagram", "@layan.art", "رسم ديجيتال وكاليجرافي عربي", 4321, 3714, 669],
+  ["https://tiktok.com/@yahya.dubs", "tiktok", "@yahya.dubs", "دبلجة كوميدية للمشاهد المشهورة", 3999, 1122, 547],
+  ["https://tiktok.com/@sara.skincare", "tiktok", "@sara.skincare", "روتين عناية بالبشرة للبشرة العربية", 3100, 2533, 244],
+  ["https://x.com/arabdevnotes", "x", "@arabdevnotes", "أدوات وأخبار تقنية للمطورين العرب", 2800, 442, 96],
+  ["https://instagram.com/khaled.travelz", "instagram", "@khaled.travelz", "رحلات موفرة في الخليج ومصر", 2417, 1917, 130],
+  ["https://tiktok.com/@fofo.comedy", "tiktok", "@fofo.comedy", "سكتشات كوميدية عن الحياة اليومية", 1999, 1130, 88],
+  ["https://x.com/startupgcc", "x", "@startupgcc", "شركات ناشئة واستثمار في الخليج", 1500, 50, 12],
+  ["https://linkedin.com/in/layla-hassan", "linkedin", "Layla Hassan", "Product Manager | الرياض", 1200, 809, 71],
+  ["https://chefsouq.com", "website", "chefsouq.com", "كل حاجة للمطبخ بتوصيل لنفس اليوم", 999, 648, 51],
+  ["https://instagram.com/bassam.builds", "instagram", "@bassam.builds", "مشاريع DIY بالعربي للأطفال والكبار", 888, 810, 33],
+  ["https://launcharabia.com", "website", "launcharabia.com", "دليل إطلاق منتجك الأول بالعربي", 777, 547, 42],
+  ["https://x.com/tamergad", "x", "@tamergad", "تقييمات أجهزة وتقنية بالعربي", 666, 4497, 380],
+  ["https://tiktok.com/@hind.recipes", "tiktok", "@hind.recipes", "وصفات سريعة في دقيقتين", 555, 669, 45],
+  ["https://apps.apple.com/ar/app/wasfati/id1494567890", "app", "وصفاتي", "وصفات عربية خطوة بخطوة", 444, 120, 9],
+  ["https://3laam.com", "website", "3laam.com", "محتوى ومقالات عربية مبسطة", 333, 12, 1],
+  ["https://play.google.com/store/apps/details?id=com.hogag.app", "app", "حجز ملاعب", "احجز ملعبك مع أصحابك في دقيقة", 222, 8, 1],
+  ["https://instagram.com/dina.decor", "instagram", "@dina.decor", "ديكور الدار بأقل تكلفة", 111, 45, 3],
+  ["https://tiktok.com/@ziad.guitar", "tiktok", "@ziad.guitar", "تعلم الجيتار من الصفر بالعربي", 55, 21, 2],
 ];
 
 function mockSeed(): MockListing[] {
@@ -66,13 +65,14 @@ function mockSeed(): MockListing[] {
   return SEED.map((s, i) => ({
     id: `seed-${i}`,
     url: s[0],
+    platform: s[1],
     target_url: s[0],
     image_url: null,
-    display_name: s[1],
-    description: s[2],
-    bid_amount: s[3],
-    clicks: s[4],
-    clicks_per_hour: s[5],
+    display_name: s[2],
+    description: s[3],
+    bid_amount: s[4],
+    clicks: s[5],
+    clicks_per_hour: s[6],
     created_at: new Date(now - (i + 1) * 3 * HOUR).toISOString(),
     last_bid_at: new Date(now - (i * 9 + 1) * MINUTE).toISOString(),
   }));
@@ -129,46 +129,64 @@ function sortBoard(listings: Listing[]): Listing[] {
 // Public API — used by pages and API routes.
 // ───────────────────────────────────────────────────────────
 
-export async function getLeaderboard(page = 1): Promise<LeaderboardPage> {
+/**
+ * Leaderboard page. Ranks are always the listing's GLOBAL rank on the board;
+ * the platform filter only narrows which rows are returned.
+ */
+export async function getLeaderboard(
+  page = 1,
+  platform: PlatformFilter = "all"
+): Promise<LeaderboardPage> {
+  let all: Listing[];
   if (MOCK_MODE) {
-    const all = sortBoard(mockListings());
-    const totalPages = Math.max(1, Math.ceil(all.length / PER_PAGE));
-    const p = Math.min(Math.max(1, page), totalPages);
-    return {
-      listings: all.slice((p - 1) * PER_PAGE, p * PER_PAGE),
-      totalPages,
-      total: all.length,
-      topBid: all[0]?.bid_amount ?? 0,
-    };
+    all = sortBoard(mockListings());
+  } else {
+    const { data, error } = await supabase()
+      .from("listings")
+      .select("*")
+      .eq("is_active", true)
+      .order("bid_amount", { ascending: false })
+      .order("last_bid_at", { ascending: true })
+      .limit(5000);
+    if (error) throw error;
+    all = (data ?? []) as Listing[];
   }
-  const [pageRes, countRes, topRes] = await Promise.all([
-    supabase()
-      .from("listings")
-      .select("*")
-      .eq("is_active", true)
-      .order("bid_amount", { ascending: false })
-      .order("last_bid_at", { ascending: true })
-      .range((page - 1) * PER_PAGE, page * PER_PAGE - 1),
-    supabase()
-      .from("listings")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true),
-    supabase()
-      .from("listings")
-      .select("*")
-      .eq("is_active", true)
-      .order("bid_amount", { ascending: false })
-      .order("last_bid_at", { ascending: true })
-      .limit(1),
-  ]);
-  if (pageRes.error) throw pageRes.error;
-  const count = countRes.count ?? 0;
+
+  const ranked = all.map((l, i) => ({ listing: l, rank: i + 1 }));
+  const filtered = platform === "all" ? ranked : ranked.filter((r) => r.listing.platform === platform);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const p = Math.min(Math.max(1, page), totalPages);
+  const pageRows = filtered.slice((p - 1) * PER_PAGE, p * PER_PAGE);
   return {
-    listings: (pageRes.data ?? []) as Listing[],
-    totalPages: Math.max(1, Math.ceil(count / PER_PAGE)),
-    total: count,
-    topBid: topRes.data?.[0]?.bid_amount ?? 0,
+    listings: pageRows.map((r) => r.listing),
+    ranks: pageRows.map((r) => r.rank),
+    totalPages,
+    total: filtered.length,
+    totalAll: all.length,
+    topBid: all[0]?.bid_amount ?? 0,
   };
+}
+
+/** Rank map for a set of listings (global rank by bid desc, last_bid_at asc). */
+export async function getRanks(ids: string[]): Promise<Map<string, number>> {
+  const ranks = new Map<string, number>();
+  if (ids.length === 0) return ranks;
+  let all: Listing[];
+  if (MOCK_MODE) {
+    all = sortBoard(mockListings());
+  } else {
+    const { data } = await supabase()
+      .from("listings")
+      .select("id, bid_amount, last_bid_at, is_active")
+      .eq("is_active", true)
+      .order("bid_amount", { ascending: false })
+      .order("last_bid_at", { ascending: true })
+      .limit(5000);
+    all = (data ?? []) as unknown as Listing[];
+  }
+  all.forEach((l, i) => ranks.set(l.id, i + 1));
+  return ranks;
 }
 
 /** The current #1 listing (highest bid, oldest wins ties). */
@@ -241,8 +259,7 @@ function mockOnline(): number {
 
 export async function getStats(): Promise<SiteStats> {
   // Real analytics numbers (DataFast) when configured — the pill and about
-  // page display these; fall back to our own counters otherwise. `online`
-  // falls back separately when only the realtime fetch failed.
+  // page display these; fall back to our own counters otherwise.
   const df = await getDataFastStats();
   if (MOCK_MODE) {
     const all = mockListings();
@@ -303,7 +320,6 @@ export async function heartbeat(sessionId: string): Promise<number> {
   if (MOCK_MODE) {
     if (!globalStore.__mockPresence) globalStore.__mockPresence = new Map();
     globalStore.__mockPresence.set(sessionId, Date.now());
-    // Count real mock sessions + a simulated crowd
     const live = [...globalStore.__mockPresence.values()].filter(
       (t) => Date.now() - t < 90_000
     ).length;
@@ -346,29 +362,27 @@ async function addRevenue(db: SupabaseClient, delta: number): Promise<void> {
 
 export type ApplyResult =
   | { ok: true; listing: Listing; isNew: boolean; paidDelta: number; rank: number; duplicate?: boolean }
-  | { ok: false; reason: "too-low" | "below-current" | "over-max" | "top1-window"; need?: number };
+  | { ok: false; reason: "too-low" | "below-current" | "over-max" };
 
 /**
- * Apply a completed payment. Rules (mirrors outbid.lol exactly):
- *  - new listing: bid must be >= $5 and <= MAX_BID
- *  - taking #1 from someone else costs at least top bid + $5 — bids inside
- *    the (top, top+5) window are rejected; the current #1 may raise its own
- *    bid by any amount >= $1
+ * Apply a completed payment. Rules (spec: highest total bid = highest rank):
+ *  - any bid above the current top takes #1 (no artificial window)
+ *  - new listing: $1–$999,999
  *  - raise: new total must be > current bid; payer pays only the difference
  *  - rank is recomputed and the activity feed gets a new row
  *  - idempotent per order/checkout id (webhooks can fire twice: confirmed + succeeded)
  */
 export async function applyPaidListing(params: {
   url: string;
+  platform?: Platform;
   displayName: string;
   description?: string | null;
   imageUrl?: string | null;
   targetUrl?: string | null;
   amount: number; // intended new total bid
   orderId: string;
-  skipWindowCheck?: boolean; // payment already captured — never reject on arrival
 }): Promise<ApplyResult> {
-  const { url, displayName, description, imageUrl, targetUrl, amount, orderId } = params;
+  const { url, platform, displayName, description, imageUrl, targetUrl, amount, orderId } = params;
   if (amount > MAX_BID) return { ok: false, reason: "over-max" };
   if (amount < MIN_BID) return { ok: false, reason: "too-low" };
 
@@ -377,20 +391,9 @@ export async function applyPaidListing(params: {
     mockProcessed().add(orderId);
     const list = mockListings();
     const existing = list.find((l) => l.url === url);
-    const top = sortBoard(list)[0] ?? null;
     const nowIso = new Date().toISOString();
     if (existing) {
       if (amount <= existing.bid_amount) return { ok: false, reason: "below-current" };
-      const isTop1 = top != null && existing.id === top.id;
-      if (
-        !params.skipWindowCheck &&
-        !isTop1 &&
-        top != null &&
-        amount > top.bid_amount &&
-        amount < top.bid_amount + TOP1_STEP
-      ) {
-        return { ok: false, reason: "top1-window", need: top.bid_amount + TOP1_STEP };
-      }
       const delta = amount - existing.bid_amount;
       existing.bid_amount = amount;
       existing.last_bid_at = nowIso;
@@ -401,17 +404,10 @@ export async function applyPaidListing(params: {
       pushMockActivity(existing, list, nowIso);
       return { ok: true, listing: existing, isNew: false, paidDelta: delta, rank: rankOf(existing, list) };
     }
-    if (
-      !params.skipWindowCheck &&
-      top != null &&
-      amount > top.bid_amount &&
-      amount < top.bid_amount + TOP1_STEP
-    ) {
-      return { ok: false, reason: "top1-window", need: top.bid_amount + TOP1_STEP };
-    }
     const listing: MockListing = {
       id: `mock-${Date.now()}`,
       url,
+      platform: platform ?? "website",
       target_url: targetUrl ?? url,
       image_url: imageUrl ?? null,
       display_name: displayName,
@@ -446,28 +442,10 @@ export async function applyPaidListing(params: {
   }
 
   const { data: existing } = await db.from("listings").select("*").eq("url", url).maybeSingle();
-  const { data: topRow } = await db
-    .from("listings")
-    .select("id, bid_amount")
-    .eq("is_active", true)
-    .order("bid_amount", { ascending: false })
-    .order("last_bid_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const topBid = topRow?.bid_amount ?? 0;
   const nowIso = new Date().toISOString();
 
   if (existing) {
     if (amount <= existing.bid_amount) return { ok: false, reason: "below-current" };
-    const isTop1 = topRow != null && existing.id === topRow.id;
-    if (
-      !params.skipWindowCheck &&
-      !isTop1 &&
-      amount > topBid &&
-      amount < topBid + TOP1_STEP
-    ) {
-      return { ok: false, reason: "top1-window", need: topBid + TOP1_STEP };
-    }
     const delta = amount - existing.bid_amount;
     const { data: updated, error } = await db
       .from("listings")
@@ -495,14 +473,11 @@ export async function applyPaidListing(params: {
     return { ok: true, listing: updated, isNew: false, paidDelta: delta, rank };
   }
 
-  if (!params.skipWindowCheck && amount > topBid && amount < topBid + TOP1_STEP) {
-    return { ok: false, reason: "top1-window", need: topBid + TOP1_STEP };
-  }
-
   const { data: created, error } = await db
     .from("listings")
     .insert({
       url,
+      platform: platform ?? "website",
       display_name: displayName,
       description: description ?? null,
       target_url: targetUrl ?? url,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getActivity, getLeaderboard, getTrending } from "@/lib/store";
+import { isPlatformFilter } from "@/lib/platforms";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: await getActivity(6) });
     }
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
-    return NextResponse.json(await getLeaderboard(page));
+    const platformParam = searchParams.get("platform");
+    const platform = isPlatformFilter(platformParam) ? platformParam : "all";
+    return NextResponse.json(await getLeaderboard(page, platform));
   } catch (e) {
     console.error("board api error", e);
     return NextResponse.json({ error: "board_unavailable" }, { status: 500 });

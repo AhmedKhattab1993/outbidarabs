@@ -22,13 +22,13 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "outbidarabs.lol",
+  title: "outbidarabs.lol — رتب حسابك على إنستجرام أو تيك توك",
   description:
-    "أول منصة عربية للـ Outbid — مستوحاة من outbid.lol. الترتيب هو السعر. No API keys, no revenue sharing. Just outbid your competition.",
+    "لوحة الترتيب العربية: أعلى عرض = المركز الأول. إنستجرام وتيك توك أولاً — إكس ولينكدإن والمواقع والتطبيقات مدعومة كمان. The Arab pay-to-rank board.",
   openGraph: {
     title: "outbidarabs.lol",
     description:
-      "The Arab-world outbid leaderboard — inspired by outbid.lol. Rank is the bid. Will you take #1 when this site goes viral?",
+      "Highest bid = #1. Rank your Instagram or TikTok — X, LinkedIn, websites and apps supported too. The Arab-world pay-to-rank leaderboard.",
     type: "website",
   },
 };

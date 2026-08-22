@@ -4,6 +4,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useLang } from "@/lib/lang-context";
 import { MIN_BID } from "@/lib/i18n";
+import { PLATFORMS, platformLabel } from "@/lib/platforms";
+import { PlatformIcon } from "@/components/platform-icon";
 
 function P({ children }: { children: React.ReactNode }) {
   return <p className="mt-3 leading-relaxed text-muted-foreground text-pretty">{children}</p>;
@@ -24,7 +26,7 @@ function Code({ children }: { children: React.ReactNode }) {
 }
 
 export function RulesClient() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   return (
     <>
       <SiteHeader />
@@ -35,23 +37,37 @@ export function RulesClient() {
 
           <H2>{t.rulesRankingTitle}</H2>
           <P>
-            {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> {t.rulesRankingMin}، <Code>$999,999</Code>{" "}
-            {t.rulesRankingMax}، <Code>$1</Code> {t.rulesRankingTime}
+            {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> ({t.rulesRankingMin} —{" "}
+            <Code>$999,999</Code> {t.rulesRankingMax}). {t.rulesRankingTime}
           </P>
           <P>{t.rulesRanking2}</P>
-          <P>{t.rulesRanking3}</P>
-          <P>{t.rulesRanking4}</P>
+
+          <H2>{t.rulesPlatformsTitle}</H2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {PLATFORMS.map((p) => (
+              <li
+                key={p}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-semibold"
+              >
+                <PlatformIcon platform={p} className="size-3.5" />
+                {platformLabel(p, lang)}
+              </li>
+            ))}
+          </ul>
+          <P>{t.rulesPlatformsBody}</P>
 
           <H2>{t.rulesCanTitle}</H2>
           <P>• {t.rulesCan1}</P>
           <P>• {t.rulesCan2}</P>
           <P>• {t.rulesCan3}</P>
-          <P>• {t.rulesCan4}</P>
-          <P>• {t.rulesCan5}</P>
 
           <H2>{t.rulesAfterTitle}</H2>
           <P>• {t.rulesAfter1}</P>
           <P>• {t.rulesAfter2}</P>
+
+          <p className="mt-8 border-t border-border pt-4 text-sm leading-relaxed text-muted-foreground text-pretty">
+            {t.rulesOriginNote}
+          </p>
         </div>
         <SiteFooter />
       </div>

@@ -17,11 +17,33 @@ create table if not exists listings (
   unique (url)
 );
 alter table listings add column if not exists target_url text;  -- click-through href
-alter table listings add column if not exists image_url text;   -- og:image
+alter table listings add column if not exists image_url text;   -- og:image / profile pic
+-- Platform-focused board: instagram | tiktok | x | linkedin | website | app
+alter table listings add column if not exists platform text not null default 'website';
+-- Backfill platform from the canonical url (idempotent).
+update listings set platform = case
+  when url like 'https://instagram.com/%' then 'instagram'
+  when url like 'https://tiktok.com/%' then 'tiktok'
+  when url like 'https://x.com/%' or url like 'https://twitter.com/%' then 'x'
+  when url like 'https://linkedin.com/%' then 'linkedin'
+  when url like 'https://apps.apple.com/%'
+    or url like 'https://play.google.com/%' then 'app'
+  else 'website'
+end;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'listings_platform_check'
+  ) then
+    alter table listings add constraint listings_platform_check
+      check (platform in ('instagram', 'tiktok', 'x', 'linkedin', 'website', 'app'));
+  end if;
+end $$;
 
 -- Equal bids: older bid keeps the higher rank → order by bid_amount desc, last_bid_at asc
 create index if not exists listings_rank_idx on listings (is_active, bid_amount desc, last_bid_at asc);
 create index if not exists listings_last_bid_idx on listings (last_bid_at desc);
+create index if not exists listings_platform_idx on listings (platform, is_active, bid_amount desc);
 
 -- ── Clicks (analytics) ────────────────────────────────────
 create table if not exists clicks (

@@ -1,62 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeIdentity, identityErrorMessages } from "@/lib/identity";
 import { applyPaidListing, getListingByUrl, getTopListing, MOCK_MODE } from "@/lib/store";
-import { MIN_BID, MAX_BID, TOP1_STEP } from "@/lib/i18n";
+import { MIN_BID, MAX_BID } from "@/lib/i18n";
+import { fetchListingMeta } from "@/lib/fetch-meta";
+import { isPlatform } from "@/lib/platforms";
 import { Polar } from "@polar-sh/sdk";
 
 export const dynamic = "force-dynamic";
 
 const usd = (n: number) => "$" + n.toLocaleString("en-US");
 
-// Layer-2 switch: real Supabase + mock payments. Lets the full rules engine
-// write to the real database without Polar configured. Explicit opt-in via
-// ALLOW_MOCK_PAYMENTS=true (local only — Vercel production never sets it);
-// takes precedence over Polar keys so an expired token can't break local dev.
+// Layer-2 switch: real Supabase + mock payments. Explicit opt-in via
+// ALLOW_MOCK_PAYMENTS=true (local only — Vercel production never sets it).
 const MOCK_PAYMENTS = MOCK_MODE || process.env.ALLOW_MOCK_PAYMENTS === "true";
 
-/** Best-effort metadata fetch so new listings get a description + logo
- *  automatically (same UX as the original). */
-async function fetchMeta(href: string): Promise<{ description: string | null; image: string | null }> {
-  if (href.startsWith("https://x.com/") || href.startsWith("https://twitter.com/")) {
-    return { description: null, image: null };
-  }
+// ── Client-provided preview edits (from the preview card) ──
+// Sanitized server-side; empty/oversized values are dropped and the
+// server-side fetch (or the existing listing) is used instead.
+
+function cleanTitle(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.replace(/\s+/g, " ").trim().slice(0, 60);
+  return s || undefined;
+}
+
+function cleanDescription(v: unknown): string | null | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.replace(/\s+/g, " ").trim().slice(0, 150);
+  return s || null;
+}
+
+function cleanImage(v: unknown): string | null | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.trim().slice(0, 480);
+  if (!s) return null;
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 2500);
-    const res = await fetch(href, {
-      signal: ctrl.signal,
-      headers: { "user-agent": "Mozilla/5.0 (compatible; outbidarabs/1.0)" },
-    });
-    clearTimeout(timer);
-    if (!res.ok) return { description: null, image: null };
-    const html = (await res.text()).slice(0, 300_000);
-
-    const meta = (prop: string) => {
-      const m = html.match(
-        new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']{4,600})["']`, "i")
-      );
-      return m ? m[1] : null;
-    };
-
-    let image = meta("og:image") ?? meta("twitter:image");
-    if (image) {
-      try {
-        image = new URL(image, href).toString(); // resolve relative URLs
-      } catch {
-        image = null;
-      }
-    }
-    return {
-      description: meta("og:description") ?? meta("description"),
-      image,
-    };
+    const u = new URL(s);
+    return (u.protocol === "https:" || u.protocol === "http:") ? u.toString() : null;
   } catch {
-    return { description: null, image: null };
+    return undefined; // not a URL → ignore, fall back to fetch/existing
   }
 }
 
 export async function POST(req: NextRequest) {
-  let body: { identity?: string; amount?: number };
+  let body: {
+    identity?: string;
+    amount?: number;
+    platform?: string;
+    title?: string;
+    description?: string;
+    imageUrl?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -64,8 +58,15 @@ export async function POST(req: NextRequest) {
   }
 
   const lang = req.cookies.get("lang")?.value === "en" ? "en" : "ar";
-  const identity = normalizeIdentity(body.identity ?? "");
+  const platformHint = isPlatform(body.platform) ? body.platform : undefined;
+  const identity = normalizeIdentity(body.identity ?? "", platformHint);
   if (!identity.ok) {
+    if (identity.reason === "ambiguous") {
+      return NextResponse.json(
+        { error: identityErrorMessages("ambiguous", lang as "ar" | "en"), ambiguous: true },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: identityErrorMessages(identity.reason, lang as "ar" | "en") }, { status: 400 });
   }
 
@@ -90,42 +91,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  // Taking #1 from someone else costs at least top bid + $5. The current #1
-  // may extend its own lead by any amount (≥ $1). (Mirrors outbid.lol.)
-  const isTop1 = existing != null && top != null && existing.id === top.id;
-  if (!isTop1 && top && amount > top.bid_amount && amount < top.bid_amount + TOP1_STEP) {
-    const need = top.bid_amount + TOP1_STEP;
-    const msg =
-      lang === "ar"
-        ? `لتأخذ المركز الأول، زايد بما لا يقل عن ${usd(need)}.`
-        : `To take #1, bid at least ${usd(need)}.`;
-    return NextResponse.json({ error: msg, need }, { status: 400 });
-  }
-
   // Charge only the difference when raising an existing listing.
   const charge = existing ? amount - existing.bid_amount : amount;
 
+  // Listing metadata: client edits (preview card) → existing values → server fetch.
+  const clientTitle = cleanTitle(body.title);
+  const clientDesc = cleanDescription(body.description);
+  const clientImage = cleanImage(body.imageUrl);
+  const needsFetch =
+    (!clientTitle || clientDesc === undefined || clientImage === undefined) && !existing;
+  const meta = needsFetch
+    ? await fetchListingMeta(identity.platform, identity.url, identity.href)
+    : { title: null, description: null, image: null };
+
+  const displayName = clientTitle ?? existing?.display_name ?? identity.display_name;
+  const description =
+    clientDesc !== undefined ? clientDesc : (existing?.description ?? meta.description);
+  const image = clientImage !== undefined ? clientImage : (existing?.image_url ?? meta.image);
+
   // ── Mock checkout: apply immediately and land on success ──
-  // (full mock mode, or layer-2 local stack with real DB + mock payments)
   if (MOCK_PAYMENTS) {
-    const meta = await fetchMeta(identity.href);
-    const description = existing?.description ?? meta.description;
     const result = await applyPaidListing({
       url: identity.url,
-      displayName: existing?.display_name ?? identity.display_name,
+      platform: identity.platform,
+      displayName,
       description,
-      imageUrl: existing?.image_url ?? meta.image,
+      imageUrl: image,
       targetUrl: identity.href,
       amount,
       orderId: `mock_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
     });
     if (!result.ok) {
-      const reason = result.reason === "top1-window" && result.need
-        ? lang === "ar"
-          ? `لتأخذ المركز الأول، زايد بما لا يقل عن ${usd(result.need)}.`
-          : `To take #1, bid at least ${usd(result.need)}.`
-        : identityErrorMessages(result.reason, lang as "ar" | "en");
-      return NextResponse.json({ error: reason }, { status: 400 });
+      return NextResponse.json(
+        { error: identityErrorMessages(result.reason, lang as "ar" | "en") },
+        { status: 400 }
+      );
     }
     return NextResponse.json({
       url: `/success?name=${encodeURIComponent(result.listing.display_name)}&amount=${amount}&rank=${result.rank}&mock=1`,
@@ -140,10 +140,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "payments_not_configured" }, { status: 500 });
   }
 
-  const meta = await fetchMeta(identity.href);
-  const description = existing?.description ?? meta.description;
-  const image = existing?.image_url ?? meta.image;
-
   try {
     const polar = new Polar({
       accessToken: token,
@@ -152,15 +148,15 @@ export async function POST(req: NextRequest) {
     // Polar rejects empty-string metadata values — only send non-empty keys.
     const metadata: Record<string, string> = {
       identity_url: identity.url,
-      display_name: existing?.display_name ?? identity.display_name,
+      display_name: displayName,
+      platform: identity.platform,
       target_url: identity.href.slice(0, 480),
       amount: String(amount), // intended new total bid
       base_bid: String(existing?.bid_amount ?? 0),
       charge: String(charge), // what the payer actually pays
     };
     // DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api):
-    // pass the SDK's first-party cookies as checkout metadata; DataFast
-    // attributes the payment automatically — no webhook needed.
+    // pass the SDK's first-party cookies as checkout metadata.
     const dfVisitor = req.cookies.get("datafast_visitor_id")?.value;
     const dfSession = req.cookies.get("datafast_session_id")?.value;
     if (dfVisitor) metadata.datafast_visitor_id = dfVisitor;

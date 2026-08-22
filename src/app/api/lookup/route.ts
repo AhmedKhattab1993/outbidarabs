@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeIdentity } from "@/lib/identity";
 import { getListingByUrl, getTopListing } from "@/lib/store";
+import { isPlatform } from "@/lib/platforms";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,10 @@ export const dynamic = "force-dynamic";
 // listing (→ "Pay $N more" flow) and returns the current #1 context.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const identity = normalizeIdentity(searchParams.get("identity") ?? "");
+  const platformHint = isPlatform(searchParams.get("platform"))
+    ? (searchParams.get("platform") as never)
+    : undefined;
+  const identity = normalizeIdentity(searchParams.get("identity") ?? "", platformHint);
   if (!identity.ok) return NextResponse.json({ existing: null, topBid: 0, topUrl: null });
 
   const [existing, top] = await Promise.all([
@@ -17,7 +21,12 @@ export async function GET(req: NextRequest) {
   ]);
   return NextResponse.json({
     existing: existing
-      ? { url: existing.url, display_name: existing.display_name, bid_amount: existing.bid_amount }
+      ? {
+          url: existing.url,
+          display_name: existing.display_name,
+          bid_amount: existing.bid_amount,
+          platform: existing.platform,
+        }
       : null,
     topBid: top?.bid_amount ?? 0,
     topUrl: top?.url ?? null,

@@ -4,7 +4,7 @@ import { RulesClient } from "./rules-client";
 export const metadata: Metadata = {
   title: "القواعد — outbidarabs.lol",
   description:
-    "كيف يعمل الترتيب على outbidarabs: دولار كامل، حد أدنى $5، المركز الأول يكلف +$5 من أعلى مزايدة. Rank is the bid.",
+    "الترتيب على outbidarabs يتحدد بإجمالي مبلغ المزايدة فقط. قوائم جديدة من $1، والرفع بدفع الفرق فقط. إنستجرام وتيك توك أولاً.",
 };
 
 export default function RulesPage() {

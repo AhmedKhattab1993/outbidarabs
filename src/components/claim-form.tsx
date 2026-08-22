@@ -15,7 +15,10 @@ type Existing = { url: string; display_name: string; bid_amount: number } | null
 
 export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string | null }) {
   const { t, lang } = useLang();
-  const [amount, setAmount] = useState(String(Math.max(MIN_BID, topBid + TOP1_STEP)));
+  // Empty board: the first spot costs the $1 minimum. With a top bid present,
+  // taking #1 costs top + TOP1_STEP.
+  const suggested = topBid > 0 ? topBid + TOP1_STEP : MIN_BID;
+  const [amount, setAmount] = useState(String(suggested));
   const [identity, setIdentity] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +30,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   const touched = useRef(false);
 
   useEffect(() => {
-    if (!touched.current) setAmount(String(Math.max(MIN_BID, topBid + TOP1_STEP)));
+    if (!touched.current) setAmount(String(topBid > 0 ? topBid + TOP1_STEP : MIN_BID));
   }, [topBid]);
 
   // Live existing-listing detection (debounced, like the reference):

@@ -262,7 +262,7 @@ Add all env vars from `.env.example` in the project settings and point
 
 ## Rules engine (mirrors outbid.lol exactly)
 
-- Whole dollars, **$5 minimum**, **$999,999 maximum**
+- Whole dollars, **$1 minimum**, **$999,999 maximum**
 - **Taking #1 costs current top bid + $5** — bids inside the (top, top+5)
   window are rejected: "To take #1, bid at least $X." The current #1 may
   extend its own lead by any amount ≥ $1

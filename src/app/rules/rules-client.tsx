@@ -3,6 +3,7 @@
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useLang } from "@/lib/lang-context";
+import { MIN_BID } from "@/lib/i18n";
 
 function P({ children }: { children: React.ReactNode }) {
   return <p className="mt-3 leading-relaxed text-muted-foreground text-pretty">{children}</p>;
@@ -34,7 +35,7 @@ export function RulesClient() {
 
           <H2>{t.rulesRankingTitle}</H2>
           <P>
-            {t.rulesRanking1} <Code>$5</Code> {t.rulesRankingMin}، <Code>$999,999</Code>{" "}
+            {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> {t.rulesRankingMin}، <Code>$999,999</Code>{" "}
             {t.rulesRankingMax}، <Code>$1</Code> {t.rulesRankingTime}
           </P>
           <P>{t.rulesRanking2}</P>

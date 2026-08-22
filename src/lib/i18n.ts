@@ -145,7 +145,7 @@ export const dict = {
       "OutbidArabs is a public leaderboard. There are no ads, no API keys, and no revenue share. You pay to stand above everyone else. Rank is the bid — nothing else.",
     rulesRankingTitle: "How ranking works",
     rulesRanking1: "New listings are whole US dollars,",
-    rulesRankingMin: "$5 minimum",
+    rulesRankingMin: "minimum",
     rulesRankingMax: "$999,999 maximum",
     rulesRankingTime: "at a time. Bids already on the board keep their amount until they raise or get outranked.",
     rulesRanking2:
@@ -181,9 +181,9 @@ export function getDict(lang: Lang): Dict {
   return dict[lang] as Dict;
 }
 
-export const MIN_BID = 5;
+export const MIN_BID = 1;
 export const MAX_BID = 999999;
-export const TOP1_STEP = 5; // taking #1 costs top bid + $5
+export const TOP1_STEP = 5; // taking #1 costs top bid + $5 (empty board starts at MIN_BID)
 export const PER_PAGE = 50; // rows per leaderboard page (matches reference)
 
 // Public launch timestamp (overridable via env). Used by the earnings card

@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { ActivityItem, LeaderboardPage, Listing, SiteStats, TrendingItem } from "@/lib/types";
 import { MIN_BID, MAX_BID, TOP1_STEP, PER_PAGE, LAUNCH_ISO } from "@/lib/i18n";
+import { getDataFastStats } from "@/lib/datafast";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -239,12 +240,15 @@ function mockOnline(): number {
 }
 
 export async function getStats(): Promise<SiteStats> {
+  // Real analytics numbers (DataFast) when configured — the pill and about
+  // page display these; fall back to our own counters otherwise.
+  const df = await getDataFastStats();
   if (MOCK_MODE) {
     const all = mockListings();
     const sorted = sortBoard(all);
     return {
-      online: mockOnline(),
-      visitors: 1_085_026 + (globalStore.__mockVisitors ?? 0),
+      online: df?.online ?? mockOnline(),
+      visitors: df?.visitors ?? 1_085_026 + (globalStore.__mockVisitors ?? 0),
       totalRevenue: mockRevenue(),
       listingCount: all.length,
       highestBid: sorted[0]?.bid_amount ?? 0,
@@ -265,8 +269,8 @@ export async function getStats(): Promise<SiteStats> {
   ]);
   const stats = new Map((statsRes.data ?? []).map((s: any) => [s.key, Number(s.value)]));
   return {
-    online: onlineRes.data != null ? Number(onlineRes.data) : 0,
-    visitors: stats.get("visitors") ?? 0,
+    online: df?.online ?? (onlineRes.data != null ? Number(onlineRes.data) : 0),
+    visitors: df?.visitors ?? (stats.get("visitors") ?? 0),
     totalRevenue: stats.get("total_revenue") ?? 0,
     listingCount: countRes.count ?? 0,
     highestBid: topRes.data?.[0]?.bid_amount ?? 0,

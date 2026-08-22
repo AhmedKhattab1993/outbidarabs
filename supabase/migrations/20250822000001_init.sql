@@ -7,7 +7,7 @@ create table if not exists listings (
   url text not null,                    -- clean url or @handle
   display_name text not null,           -- domain or @handle shown
   description text,                     -- optional Arabic/English
-  bid_amount integer not null check (bid_amount between 5 and 999999),
+  bid_amount integer not null check (bid_amount between 1 and 999999),
   clicks integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

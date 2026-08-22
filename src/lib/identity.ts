@@ -153,7 +153,7 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
     },
     shortener: { ar: "روابط التقصير ممنوعة", en: "Link shorteners are not allowed" },
     nsfw: { ar: "المحتوى للبالغين ممنوع", en: "Adult content is not allowed" },
-    "too-low": { ar: "الحد الأدنى $5", en: "Minimum bid is $5" },
+    "too-low": { ar: "الحد الأدنى $1", en: "Minimum bid is $1" },
     "over-max": { ar: "الحد الأقصى $999,999", en: "Maximum bid is $999,999" },
   };
   return (msgs[reason] ?? msgs.invalid)[lang];

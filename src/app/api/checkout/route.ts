@@ -4,8 +4,6 @@ import { applyPaidListing, getListingByUrl, getTopListing, MOCK_MODE } from "@/l
 import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { fetchListingMeta } from "@/lib/fetch-meta";
 import { isPlatform } from "@/lib/platforms";
-import { activePaymentProvider } from "@/lib/apply-payment";
-import { Polar } from "@polar-sh/sdk";
 import DodoPayments from "dodopayments";
 
 export const dynamic = "force-dynamic";
@@ -134,14 +132,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── Real checkout (Dodo or Polar — provider picked by env, dodo first) ──
-  const provider = activePaymentProvider();
-  if (!provider) {
+  // ── Dodo Payments checkout ──
+  if (!process.env.DODO_API_KEY || !process.env.DODO_PRODUCT_ID) {
     return NextResponse.json({ error: "payments_not_configured" }, { status: 500 });
   }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  // Polar rejects empty-string metadata values — only send non-empty keys.
+  // Metadata is read back by the webhook to apply the listing. Empty values omitted.
   const metadata: Record<string, string> = {
     identity_url: identity.url,
     display_name: displayName,
@@ -151,54 +148,30 @@ export async function POST(req: NextRequest) {
     base_bid: String(existing?.bid_amount ?? 0),
     charge: String(charge), // what the payer actually pays
   };
-  // DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api):
-  // pass the SDK's first-party cookies as checkout metadata.
-  const dfVisitor = req.cookies.get("datafast_visitor_id")?.value;
-  const dfSession = req.cookies.get("datafast_session_id")?.value;
-  if (dfVisitor) metadata.datafast_visitor_id = dfVisitor;
-  if (dfSession) metadata.datafast_session_id = dfSession;
   if (description) metadata.description = description.slice(0, 480);
   if (image) metadata.image_url = image.slice(0, 480);
 
   try {
-    if (provider === "dodo") {
-      // ── Dodo Payments ──
-      // Product must be Pay-What-You-Want with a $1 minimum so the per-checkout
-      // `amount` (the bid, or the raise difference) is honored. Amount is in
-      // cents, like Polar.
-      const dodo = new DodoPayments({
-        bearerToken: process.env.DODO_API_KEY!,
-        environment: process.env.DODO_ENVIRONMENT === "live_mode" ? "live_mode" : "test_mode",
-      });
-      const session = await dodo.checkoutSessions.create({
-        product_cart: [
-          {
-            product_id: process.env.DODO_PRODUCT_ID!,
-            quantity: 1,
-            // cents — the difference for raises, full bid for new listings
-            amount: charge * 100,
-          },
-        ],
-        return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}`,
-        metadata,
-      });
-      return NextResponse.json({ url: session.checkout_url });
-    }
-
-    // ── Polar ──
-    const polar = new Polar({
-      accessToken: process.env.POLAR_ACCESS_TOKEN!,
-      server: process.env.POLAR_ENVIRONMENT === "production" ? "production" : "sandbox",
+    // Product is Pay-What-You-Want with a $1 minimum so the per-checkout
+    // `amount` (the bid, or the raise difference) is honored. Amount is in cents.
+    const dodo = new DodoPayments({
+      bearerToken: process.env.DODO_API_KEY,
+      environment: process.env.DODO_ENVIRONMENT === "live_mode" ? "live_mode" : "test_mode",
     });
-    const checkout = await polar.checkouts.create({
-      products: [process.env.POLAR_PRODUCT_ID!],
-      amount: charge * 100, // cents — the difference for raises, full bid for new listings
-      successUrl: `${siteUrl}/success?checkout_id={CHECKOUT_ID}`,
+    const session = await dodo.checkoutSessions.create({
+      product_cart: [
+        {
+          product_id: process.env.DODO_PRODUCT_ID,
+          quantity: 1,
+          amount: charge * 100, // cents — the difference for raises, full bid for new listings
+        },
+      ],
+      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}`,
       metadata,
     });
-    return NextResponse.json({ url: checkout.url });
+    return NextResponse.json({ url: session.checkout_url });
   } catch (e) {
-    console.error(`${provider} checkout error`, e);
+    console.error("dodo checkout error", e);
     return NextResponse.json({ error: "checkout_failed" }, { status: 500 });
   }
 }

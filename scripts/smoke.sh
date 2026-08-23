@@ -6,7 +6,7 @@
 #   bash scripts/smoke.sh https://outbidarabs.lol
 #
 # Reads the board, exercises the rules engine through the mock-safe endpoints,
-# and verifies the identity/preview/redirect layers. No Polar calls (mock-mode
+# and verifies the identity/preview/redirect layers. No Dodo calls (mock-mode
 # safe); payment-specific checks (Layer 3) are documented in README.md.
 #
 # Exit code 0 = all checks passed.
@@ -122,12 +122,12 @@ TS=$(( $(date +%s) % 100000 ))
 # Payment mode: a real provider configured → checkouts return provider URLs and
 # no state is written until a webhook fires. Stateful engine checks are skipped.
 PAYMENT_MODE=0
-is_provider_url() { echo "$1" | grep -qE 'polar|dodopayments'; }
+is_provider_url() { echo "$1" | grep -q 'dodopayments'; }
 
 # 4a. new listing at top+1 → ACCEPTED and takes #1 (highest bid = highest rank)
 R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
   -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1)),\"title\":\"Smoke Site\",\"description\":\"smoke\"}")
-if echo "$R" | grep -qE 'polar|dodopayments'; then
+if echo "$R" | grep -q 'dodopayments'; then
   PAYMENT_MODE=1
   echo "  ⚠ payment mode (real provider) — stateful checks need webhooks, skipping"
 elif echo "$R" | grep -q '"url"'; then
@@ -184,10 +184,10 @@ R=$(post_checkout "https://example.com/%D9%85%D8%B1%D8%A7%D9%87%D9%86%D8%A7%D8%A
 check "rejects illegal (arabic path)" $(echo "$R" | grep -q 'غير القانوني\|Illegal content' && echo 0 || echo 1)
 # Controls that must still pass (gambling keyword FP guards)
 R=$(post_checkout "https://betterhelp$TS.example.com" 6)
-check "betterhelp-style host allowed" $(echo "$R" | grep -q '"url"\|polar' && echo 0 || echo 1)
+check "betterhelp-style host allowed" $(echo "$R" | grep -q '"url"\|dodopayments' && echo 0 || echo 1)
 
 R=$(post_checkout "https://about.me/smoke$TS" 6)
-check "about.me allowed" $(echo "$R" | grep -q '"url"\|polar' && echo 0 || echo 1)
+check "about.me allowed" $(echo "$R" | grep -q '"url"\|dodopayments' && echo 0 || echo 1)
 
 # Play Store apps keyed by `?id=`: two different ids must be two listings.
 P1=$(post_checkout "https://play.google.com/store/apps/details?id=com.smoke.one.$TS" 6)

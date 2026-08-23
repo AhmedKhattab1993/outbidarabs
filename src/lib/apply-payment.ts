@@ -1,4 +1,4 @@
-// Shared payment-apply logic for all payment providers (Polar, Dodo, …).
+// Shared payment-apply logic for the Dodo Payments webhook.
 // A webhook's only job: verify the event, extract metadata, and call this.
 
 import { applyPaidListing, getListingByUrl } from "@/lib/store";
@@ -45,17 +45,4 @@ export async function applyPaidCheckout(
 
   if (!result.ok) console.error("payment apply failed", orderId, result.reason);
   return { ok: result.ok, reason: result.ok ? undefined : result.reason };
-}
-
-/** Which payment provider the checkout route should use. */
-export type PaymentProvider = "dodo" | "polar";
-
-export function activePaymentProvider(): PaymentProvider | null {
-  const explicit = process.env.PAYMENT_PROVIDER?.toLowerCase();
-  if (explicit === "dodo") return "dodo";
-  if (explicit === "polar") return "polar";
-  // auto: first provider with a full key set wins (dodo preferred)
-  if (process.env.DODO_API_KEY && process.env.DODO_PRODUCT_ID) return "dodo";
-  if (process.env.POLAR_ACCESS_TOKEN && process.env.POLAR_PRODUCT_ID) return "polar";
-  return null;
 }

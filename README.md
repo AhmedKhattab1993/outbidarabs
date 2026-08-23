@@ -13,7 +13,7 @@ built for the Arab market and focused on social media accounts.
 
 - **Next.js 15** (App Router) + TypeScript + Tailwind CSS v4
 - **Supabase** — Postgres, Realtime leaderboard updates, RLS (public read, service-role write)
-- **Polar.sh** — Merchant of Record checkout (works with Egyptian Visa/Mastercard)
+- **Dodo Payments** — Merchant of Record checkout (accepts EG/SA/AE merchants)
 - **Vercel** hosting
 - Arabic (RTL, default) + English toggle, dark mode, DM Sans + IBM Plex Sans Arabic
 
@@ -39,7 +39,7 @@ nothing reaches `outbidarabs.lol` without Layer 4 passing.
 |---|---|---|---|
 | 1. Local mock | `npm run dev` (default) | UI, RTL/AR/EN/dark, rules engine, identity edge cases, claim-form UX | seconds |
 | 2. Local full-stack | Supabase CLI + `MOCK_MODE=false` | SQL bugs: schema, RLS, RPCs (`heartbeat`, `bump_stat`, `listing_rank`), Realtime | minutes |
-| 3. Payments | Polar sandbox + tunnel/preview | Webhook signature, checkout amount (difference vs full), idempotency, success redirect | minutes |
+| 3. Payments | Dodo test_mode + tunnel/preview | Webhook signature, checkout amount (difference vs full), idempotency, success redirect | minutes |
 | 4. Vercel preview | Branch deploy + staging Supabase | Build/env differences, cold starts, full path exactly as prod runs it | ~1 min/deploy |
 | 5. Production | `outbidarabs.lol` | Live traffic & real money — monitored, smoke-verified after every deploy | deploy + verify |
 
@@ -70,7 +70,7 @@ hosted SQL editor. `supabase/seed.sql` runs after migrations by CLI convention.
 
 Then point `.env.local` at the local instance with `NEXT_PUBLIC_MOCK_MODE=false`
 **and `ALLOW_MOCK_PAYMENTS=true`** (mock payments + real DB — lets the whole
-rules engine write to Postgres without Polar) and restart `npm run dev`.
+rules engine write to Postgres without Dodo) and restart `npm run dev`.
 
 ⚠️ Get the keys from `npx supabase status -o env` — the local API validates the
 JWT issuer, and the keys printed by plain `supabase start` stdout may be
@@ -82,16 +82,16 @@ by the paid delta, `/go/[id]` increments clicks, `/api/visit` heartbeat returns
 online ≥ 1, Realtime pushes a new row without a manual refresh. All of this is
 covered by `scripts/smoke.sh`.
 
-### Layer 3 — Payments (Polar sandbox)
+### Layer 3 — Payments (Dodo test mode)
 
-Why a separate layer from 2: different prerequisites (a Polar account +
+Why a separate layer from 2: different prerequisites (a Dodo account +
 webhook registration + public tunnel vs. just Docker), different bug classes
 (integration vs. your SQL), and different cadence — you iterate on SQL often,
 on payment code rarely. Isolating them also answers "my webhook or my
 database?" instantly.
 
 **Runs best composed with Layer 2** ("full local stack"): local Supabase +
-Polar sandbox through the tunnel is the only local config that exercises the
+Dodo test mode through the tunnel is the only local config that exercises the
 real write path — `processed_checkouts` idempotency insert, service-role
 writes, `add_stat` revenue RPC. Without Layer 2, Layer 3 applies listings to
 the in-memory mock store and only tests webhook mechanics (still useful for
@@ -104,22 +104,23 @@ deployment protection blocks them (they can't log in). Two options:
 
 ```bash
 ngrok http 3000            # or: cloudflared tunnel --url http://localhost:3000
-# Polar sandbox → webhook endpoint: https://<tunnel-id>.ngrok.io/api/webhooks/polar
+# Dodo test mode → webhook endpoint: https://<tunnel-id>.ngrok.io/api/webhooks/dodo
+#   (subscribe to payment.succeeded)
 ```
 
 **b) Preview deployment**: push a branch, open the Vercel preview URL, disable
 deployment protection for it, point the sandbox webhook there.
 
-Use Polar's test card on the sandbox checkout and verify: checkout `amount`
+Use Dodo's test card on the test-mode checkout and verify: checkout `amount`
 equals the **difference** for raises (×100 cents), the webhook applies the
 listing once (fire the same event twice → one apply), and `/success` lands back
 on the board with the new rank. With Layer 2 running, also confirm in the local
-Supabase Studio that `processed_checkouts` has the checkout id, `activity` has
+Supabase Studio that `processed_checkouts` has the payment id, `activity` has
 the row, and `site_stats.total_revenue` grew by the paid delta.
 
-**Simulating Polar webhooks locally** — `scripts/simulate-webhook.mjs` signs a
-`checkout.updated`/`succeeded` payload exactly like Polar and drives the full
-path without a browser payment:
+**Simulating Dodo webhooks locally** — `scripts/simulate-dodo-webhook.mjs` signs a
+`payment.succeeded` payload exactly like Dodo (Standard Webhooks HMAC-SHA256)
+and drives the full path without a browser payment:
 
 ```bash
 set -a; . ./.env; set +a
@@ -127,20 +128,15 @@ node scripts/simulate-webhook.mjs <amount> <identityUrl> <checkoutId-or-syntheti
 ```
 
 It sends four requests: valid (expect 200 + apply), replay (200, no double
-apply), tampered payload (403), bad signature (403). If `<checkoutId>` is a
-real sandbox `polar_c_…` id the payload is built from the actual checkout
-object (exact Polar shape); otherwise a synthetic minimal object is used — the
-SDK schema requires the full object, so prefer real ids (create one via
-`POST /api/checkout`). Note: the SDK derives the HMAC key from the raw
-`whsec_…` string bytes (not the base64 payload) — the simulator matches this.
+apply), tampered body (403), bad signature (403).
 
 ### Layer 4 — Vercel preview / staging
 
 **Staging is live at `staging.outbidarabs.lol`**: a hosted Supabase project
-(`outbidarabs-staging`, real database, empty board) + Polar sandbox — the
+(`outbidarabs-staging`, real database, empty board) + Dodo test mode — the
 full real product, money included (test cards), with data derived only from
-actions taken on the site. The Polar sandbox webhook points at
-`https://staging.outbidarabs.lol/api/webhooks/polar`.
+actions taken on the site. The Dodo webhook points at
+`https://staging.outbidarabs.lol/api/webhooks/dodo`.
 
 ⚠️ **Deploy with `bash scripts/deploy.sh [prod]`, never bare `vercel deploy`** —
 the CLI uploads local `.env`/`.env.local` into the build, which would override
@@ -149,8 +145,8 @@ and `localhost` Supabase URLs leak into the deployment). The script hides
 local env files for the deploy and restores them after.
 
 Env vars per target (Vercel → Settings → Environment Variables):
-- **Preview**: staging Supabase keys + sandbox Polar + `SITE_URL=https://staging.outbidarabs.lol`
-- **Production**: prod Supabase + prod Polar + `MOCK_MODE=false` (never set `ALLOW_MOCK_PAYMENTS`)
+- **Preview**: staging Supabase keys + Dodo test_mode keys (staging webhook secret) + `SITE_URL=https://staging.outbidarabs.lol`
+- **Production**: prod Supabase + Dodo live keys + `MOCK_MODE=false` (never set `ALLOW_MOCK_PAYMENTS`)
 
 Note: Vercel's automatic DDoS mitigation can show a "Security Checkpoint" on
 the domain after bursts of scripted traffic (smoke tests, webhooks). It's
@@ -171,15 +167,16 @@ bash scripts/smoke.sh https://outbidarabs.lol    # verify live
 **Production checklist (beyond the smoke suite):**
 
 - Env vars set for Production environment only: `NEXT_PUBLIC_MOCK_MODE=false`,
-  prod Supabase URL/anon/service-role, `POLAR_ACCESS_TOKEN` + `POLAR_PRODUCT_ID`
-  + `POLAR_WEBHOOK_SECRET` + `POLAR_ENVIRONMENT=production`,
+  prod Supabase URL/anon/service-role, `DODO_API_KEY` + `DODO_PRODUCT_ID`
+  + `DODO_WEBHOOK_SECRET` + `DODO_ENVIRONMENT=live_mode`,
   `NEXT_PUBLIC_SITE_URL=https://outbidarabs.lol`, optional
   `NEXT_PUBLIC_LAUNCH_DATE`
 - Supabase prod project: `schema.sql` applied, Realtime enabled for `listings`
   + `activity` — **and no seed data**: production launches empty (fictional
   bids/clicks/revenue must never be presented as real activity)
-- Polar production webhook `https://outbidarabs.lol/api/webhooks/polar`
-  subscribed to checkout events; test once with a real small payment and refund it
+- Dodo live webhook `https://outbidarabs.lol/api/webhooks/dodo`
+  subscribed to `payment.succeeded`; test once with a real small payment and
+  refund it
 - After first real webhook: confirm `total_revenue` grew and the activity feed
   has the row (this is what the earnings card displays)
 
@@ -187,8 +184,8 @@ bash scripts/smoke.sh https://outbidarabs.lol    # verify live
 
 - `/api/stats` — board size, top bid, revenue, online count
 - Vercel dashboard → Deployments/Logs for runtime errors (webhook apply
-  failures log `polar webhook apply failed <reason>`)
-- Polar dashboard → payments vs. board: every captured checkout should appear
+  failures log `payment apply failed <paymentId> <reason>`)
+- Dodo dashboard → payments vs. board: every captured payment should appear
   as a listing/raise; any mismatch = investigate immediately (money involved)
 - Supabase dashboard → Table editor for `listings`/`activity`/`processed_checkouts`
 
@@ -197,7 +194,7 @@ bash scripts/smoke.sh https://outbidarabs.lol    # verify live
 schema rollbacks are separate — apply reverse SQL carefully).
 
 **Current state:** production is live on the real stack (prod Supabase +
-production Polar + DataFast) with an **empty board** — the honest launch state.
+Dodo test-mode payments + DataFast) with an **empty board** — the honest launch state.
 ⚠️ **Never apply seed data to production**: the seed rows (and the
 `total_revenue` sum of their bids) are fictional. Real listings/revenue may
 only come from real payments. `scripts/seed-rest.mjs` is for **staging and
@@ -233,7 +230,7 @@ be inconclusive depending on instance affinity. The script detects this and
 reports `⚠ inconclusive` instead of failing. Stateful checks are fully
 reliable against local dev and any Supabase-backed deployment (layers 2–4).
 Payment-only checks (checkout amount = difference, webhook idempotency) are
-layer 3 and documented above — the script never calls Polar.
+layer 3 and documented above — the script never calls Dodo.
 
 ## Going live
 
@@ -253,8 +250,8 @@ layer 3 and documented above — the script never calls Polar.
 
 ### 2. Payments (Dodo Payments — primary)
 
-Polar classifies paid leaderboards as "directories and boards" (restricted, likely
-not accepted) — keep the appeal open, but Dodo is the primary provider now:
+Polar rejected the board under its "directories and boards" category, so Dodo
+is the provider:
 
 1. Create an account at [dodopayments.com](https://dodopayments.com) (merchant
    acceptance includes Egypt, Saudi, UAE)
@@ -277,46 +274,6 @@ node scripts/simulate-dodo-webhook.mjs <amount> <identityUrl> [paymentId] [charg
 
 Valid (applies) · replay (no double apply) · tampered body (403) · bad
 signature (403).
-
-Provider selection: `PAYMENT_PROVIDER=dodo|polar` forces one; otherwise the
-first provider with a complete key set wins (dodo first). Both webhooks can
-stay registered — the apply layer is idempotent per payment id.
-
-### 2b. Polar (secondary — appeal pending)
-
-1. Create an account at [polar.sh](polar.sh) (sandbox first)
-2. Create a product **"Outbid Spot"** with a **custom price** — set the product
-   minimum to **$1** (raises are charged only the difference, which can be $1)
-3. Copy the product ID into `POLAR_PRODUCT_ID`, a token into `POLAR_ACCESS_TOKEN`
-4. Add a webhook endpoint `https://yourdomain.com/api/webhooks/polar`
-   subscribed to **checkout** events, copy the secret into `POLAR_WEBHOOK_SECRET`
-
-   ⚠️ **Webhook secrets are per-endpoint per-environment.** The sandbox org's
-   endpoint (→ `staging.`) and the production org's endpoint (→ apex domain)
-   each have their own `whsec_…`. Vercel **Preview/Development** keep the
-   sandbox secret; **Production** must hold the production endpoint's secret —
-   a sandbox secret there means every real payment's webhook 403s and the
-   listing never applies. Swap it with:
-
-   ```bash
-   bash scripts/set-prod-webhook-secret.sh whsec_…   # updates env + redeploys
-   ```
-
-   Also remember a webhook endpoint must exist **in the production org**
-   (no endpoint = no deliveries at all, silently).
-
-5. Set `POLAR_ENVIRONMENT=production` when live and `NEXT_PUBLIC_MOCK_MODE=false`
-   — swap `POLAR_ACCESS_TOKEN` + `POLAR_PRODUCT_ID` + `POLAR_WEBHOOK_SECRET`
-   **together** and redeploy; a mix of sandbox and production values fails
-   either at checkout creation or at webhook validation.
-
-Flow: claim form (single input, auto platform detection, smart-fetch preview
-with manual editing) → `POST /api/checkout` (validates identity, strips
-tracking params, accepts the edited title/description/image) → provider-hosted
-checkout (Dodo or Polar) charging **the difference** for raises (full bid for
-new listings) → `payment.succeeded` webhook (idempotent per payment id,
-race-safe) → listing created/raised → Realtime pushes the new board to every
-visitor.
 
 ### 3. Vercel
 
@@ -351,8 +308,6 @@ Add all env vars from `.env.example` in the project settings and point
 - Webhook applies are idempotent (`processed_checkouts`); every successful
   payment appends to `activity` and adds its paid delta to `total_revenue`
   (the earnings-card number)
-- Polar checkouts carry `datafast_visitor_id`/`datafast_session_id` metadata for
-  DataFast revenue attribution (https://datafa.st/docs/polar-checkout-api)
 
 ## Smart fetching (preview card)
 
@@ -410,9 +365,9 @@ src/
     page.tsx                 # leaderboard homepage
     rules/ about/ success/   # static pages (server metadata + client inner)
     api/
-      checkout/              # validation + Polar checkout (charges difference)
+      checkout/              # validation + Dodo checkout (charges difference)
       preview/               # platform detection + smart fetch + re-bid context
-      webhooks/polar/        # payment → listing (idempotent, race-safe)
+      webhooks/dodo/         # payment.succeeded → listing (idempotent, race-safe)
       board/ stats/ visit/   # live data (platform filters) + presence heartbeat
       lookup/                # existing-listing detection for the claim form
     go/[id]/                 # click tracking redirect (utm_source=outbidarabs)

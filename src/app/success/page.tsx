@@ -16,7 +16,7 @@ function SuccessContent() {
   const [rank] = useState(() => parseInt(params.get("rank") ?? "0", 10) || 0);
 
   useEffect(() => {
-    // In mock mode the listing is already applied. With real Polar checkout
+    // In mock mode the listing is already applied. With a real Dodo checkout
     // the webhook applies it — give it a moment then head home.
     if (!params.get("mock")) {
       const timer = setTimeout(() => (window.location.href = "/#leaderboard"), 2500);

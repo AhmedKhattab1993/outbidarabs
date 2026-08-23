@@ -251,7 +251,38 @@ layer 3 and documented above — the script never calls Polar.
    `SUPABASE_SERVICE_ROLE_KEY` (server writes: webhook + click redirect + presence)
 5. Enable Realtime for the `listings` and `activity` tables (Database → Replication)
 
-### 2. Polar
+### 2. Payments (Dodo Payments — primary)
+
+Polar classifies paid leaderboards as "directories and boards" (restricted, likely
+not accepted) — keep the appeal open, but Dodo is the primary provider now:
+
+1. Create an account at [dodopayments.com](https://dodopayments.com) (merchant
+   acceptance includes Egypt, Saudi, UAE)
+2. Create a product with **Pay What You Want** enabled and a **$1 minimum**
+   (per-checkout `amount` = the bid, or the raise difference — only honored on
+   PWYW products). One-time payment, single product
+3. Copy the API key into `DODO_API_KEY` and the product id into `DODO_PRODUCT_ID`
+4. Developer → Webhooks → add endpoint `https://yourdomain.com/api/webhooks/dodo`
+   subscribed to **payment.succeeded**; copy the signing secret (`whsec_…`)
+   into `DODO_WEBHOOK_SECRET`
+5. `DODO_ENVIRONMENT=test_mode` until live, then `live_mode` + real keys
+
+Simulating Dodo webhooks locally (signs payloads per the Standard Webhooks
+spec, exactly like Dodo):
+
+```bash
+set -a; . ./.env; set +a
+node scripts/simulate-dodo-webhook.mjs <amount> <identityUrl> [paymentId] [charge]
+```
+
+Valid (applies) · replay (no double apply) · tampered body (403) · bad
+signature (403).
+
+Provider selection: `PAYMENT_PROVIDER=dodo|polar` forces one; otherwise the
+first provider with a complete key set wins (dodo first). Both webhooks can
+stay registered — the apply layer is idempotent per payment id.
+
+### 2b. Polar (secondary — appeal pending)
 
 1. Create an account at [polar.sh](polar.sh) (sandbox first)
 2. Create a product **"Outbid Spot"** with a **custom price** — set the product
@@ -281,10 +312,11 @@ layer 3 and documented above — the script never calls Polar.
 
 Flow: claim form (single input, auto platform detection, smart-fetch preview
 with manual editing) → `POST /api/checkout` (validates identity, strips
-tracking params, accepts the edited title/description/image) → Polar-hosted
-checkout charging **the difference** for raises (full bid for new listings) →
-webhook `checkout.updated` (`confirmed`/`succeeded`, idempotent per checkout
-id) → listing created/raised → Realtime pushes the new board to every visitor.
+tracking params, accepts the edited title/description/image) → provider-hosted
+checkout (Dodo or Polar) charging **the difference** for raises (full bid for
+new listings) → `payment.succeeded` webhook (idempotent per payment id,
+race-safe) → listing created/raised → Realtime pushes the new board to every
+visitor.
 
 ### 3. Vercel
 

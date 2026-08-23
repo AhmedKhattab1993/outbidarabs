@@ -119,16 +119,17 @@ check "vm.tiktok short link rejected" $(echo "$P" | json "j.status" | grep -q "e
 echo "4) Rules engine (top bid: $TOPBID)"
 TS=$(( $(date +%s) % 100000 ))
 
-# Payment mode: real Polar configured → checkouts return polar.sh URLs and no
-# state is written until a webhook fires. Stateful engine checks are skipped.
+# Payment mode: a real provider configured → checkouts return provider URLs and
+# no state is written until a webhook fires. Stateful engine checks are skipped.
 PAYMENT_MODE=0
+is_provider_url() { echo "$1" | grep -qE 'polar|dodopayments'; }
 
 # 4a. new listing at top+1 → ACCEPTED and takes #1 (highest bid = highest rank)
 R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
   -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1)),\"title\":\"Smoke Site\",\"description\":\"smoke\"}")
-if echo "$R" | grep -q 'polar'; then
+if echo "$R" | grep -qE 'polar|dodopayments'; then
   PAYMENT_MODE=1
-  echo "  ⚠ payment mode (real Polar) — stateful checks need webhooks, skipping"
+  echo "  ⚠ payment mode (real provider) — stateful checks need webhooks, skipping"
 elif echo "$R" | grep -q '"url"'; then
   RANK=$(echo "$R" | json "(j.url||'').match(/rank=(\\d+)/)?.[1] || ''")
   if [ "$RANK" = "1" ]; then ok "bid top+1 accepted at rank #1"

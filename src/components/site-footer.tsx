@@ -22,6 +22,10 @@ export function SiteFooter() {
           {t.footerRules}
         </a>{" "}
         ·{" "}
+        <a className="text-primary transition-colors hover:text-primary/80" href="/legal">
+          {t.footerTerms}
+        </a>{" "}
+        ·{" "}
         <a
           target={ANALYTICS_URL ? "_blank" : undefined}
           rel={ANALYTICS_URL ? "noopener" : undefined}

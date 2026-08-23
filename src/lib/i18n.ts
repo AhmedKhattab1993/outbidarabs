@@ -112,6 +112,7 @@ export const dict = {
     // ── About ──
     aboutTitle: "عن المنصة",
     footerRules: "القواعد",
+    footerTerms: "الشروط",
     footerLiveStats: "إحصائيات مباشرة",
     inspiredBy: "مستوحاة من outbid.lol",
   },
@@ -220,6 +221,7 @@ export const dict = {
     // ── About ──
     aboutTitle: "About",
     footerRules: "Rules",
+    footerTerms: "Terms",
     footerLiveStats: "Live stats",
     inspiredBy: "Inspired by outbid.lol",
   },

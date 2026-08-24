@@ -32,7 +32,7 @@ type PreviewState =
   | { kind: "error"; message: string }
   | null;
 
-export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string | null }) {
+export function ClaimForm({ topBid }: { topBid: number }) {
   const { t, lang } = useLang();
   const [identity, setIdentity] = useState("");
   // Platform picked in the dropdown next to the input (used to resolve bare
@@ -40,14 +40,10 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   const [platformChoice, setPlatformChoice] = useState<Platform>("instagram");
   const [preview, setPreview] = useState<PreviewState>(null);
   const [fetching, setFetching] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [amount, setAmount] = useState(String(topBid > 0 ? topBid + 1 : MIN_BID));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dirty = useRef({ title: false, desc: false, image: false });
   const touched = useRef(false);
   const fetchSeq = useRef(0);
 
@@ -73,6 +69,9 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   useEffect(() => {
     const v = identity.trim();
     if (!v) {
+      // Bump the sequence so an in-flight fetch for the cleared input can't
+      // pass the seq guard and resurrect the preview card.
+      fetchSeq.current++;
       setPreview(null);
       setFetching(false);
       return;
@@ -119,32 +118,18 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, effectivePlatform]);
 
-  // Fill editable fields from the fetched preview (never overwrite user edits)
-  const lastUrl = useRef<string | null>(null);
+  // The card is ground truth from the platform (view-only), so the preview
+  // only drives the suggested bid: raise → beat your own bid; otherwise beat
+  // the top. The server independently re-derives the listing metadata.
   useEffect(() => {
-    if (!previewOk) return;
-    if (lastUrl.current !== previewOk.url) {
-      dirty.current = { title: false, desc: false, image: false };
-      lastUrl.current = previewOk.url;
-    }
-    const fallbackTitle =
-      previewOk.meta?.title ?? previewOk.existing?.display_name ?? previewOk.displayName;
-    const fallbackDesc = previewOk.meta?.description ?? "";
-    const fallbackImage = previewOk.meta?.image ?? "";
-    if (!dirty.current.title) setTitle(fallbackTitle || previewOk.displayName);
-    if (!dirty.current.desc) setDescription(fallbackDesc);
-    if (!dirty.current.image) setImageUrl(fallbackImage);
-
-    // Suggest: raise → beat your own bid; otherwise beat the top.
-    if (!touched.current) {
-      const existing = previewOk.existing;
-      const suggest = existing
-        ? Math.max(existing.bid_amount + 1, previewOk.topBid + 1)
-        : previewOk.topBid > 0
-          ? previewOk.topBid + 1
-          : MIN_BID;
-      setAmount(String(Math.min(MAX_BID, suggest)));
-    }
+    if (!previewOk || touched.current) return;
+    const existing = previewOk.existing;
+    const suggest = existing
+      ? Math.max(existing.bid_amount + 1, previewOk.topBid + 1)
+      : previewOk.topBid > 0
+        ? previewOk.topBid + 1
+        : MIN_BID;
+    setAmount(String(Math.min(MAX_BID, suggest)));
   }, [previewOk]);
 
   // "claim this rank for $X" buttons on the board
@@ -165,8 +150,11 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   const value = parseInt(amount, 10) || 0;
   const existing = previewOk?.existing ?? null;
   const diff = existing && value > existing.bid_amount ? value - existing.bid_amount : 0;
-  const fetchedNothing = previewOk != null && previewOk.meta == null && !fetching;
-
+  const fetchedNothing = previewOk != null && previewOk.meta == null && !previewOk.existing && !fetching;
+  // Ground truth shown in the card: platform meta first, then the existing
+  // listing, then the raw handle — never editable here.
+  const gtTitle = previewOk?.meta?.title ?? existing?.display_name ?? previewOk?.displayName ?? "";
+  const gtDescription = previewOk?.meta?.description ?? null;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,9 +189,6 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
           identity,
           platform: effectivePlatform,
           amount: value,
-          title: title || undefined,
-          description: description || undefined,
-          imageUrl: imageUrl || undefined,
         }),
       });
       const data = await res.json();
@@ -247,6 +232,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
             spellCheck={false}
             required
             dir="ltr"
+            aria-label={t.inputPlaceholder[effectivePlatform]}
             className="h-full min-w-0 flex-1 bg-transparent px-3 pe-10 text-center text-base outline-none placeholder:text-muted-foreground"
             value={identity}
             onChange={(e) => {
@@ -277,37 +263,34 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
           </p>
         )}
 
-        {/* ── Preview card ── */}
+        {/* ── Preview card: ground truth from the platform, view-only ── */}
         {previewOk && (
-          <div className="rounded-2xl border bg-card p-3 shadow-sm md:p-4" dir="auto">
+          <div className="rounded-2xl border bg-card p-3 shadow-sm md:p-4">
             <div className="flex items-start gap-3">
               <span className="relative shrink-0">
                 <Avatar
-                  name={title || previewOk.displayName}
+                  name={gtTitle || previewOk.displayName}
                   url={previewOk.href}
-                  src={imageUrl || null}
+                  src={previewOk.meta?.image ?? null}
                   className="size-14 bg-muted text-lg ring-1 ring-black/5 md:size-16 md:text-xl dark:ring-white/10"
                 />
                 <span className="absolute -bottom-1 -end-1">
-                  <PlatformBadge platform={previewOk.platform} />
+                  <PlatformBadge
+                    platform={previewOk.platform}
+                    className="size-5 md:size-6"
+                    title={platformLabel(previewOk.platform, lang)}
+                  />
                 </span>
               </span>
               <div className="min-w-0 flex-1">
-                <label className="sr-only" htmlFor="preview-title">
-                  {t.titleLabel}
-                </label>
-                <input
-                  id="preview-title"
-                  value={title}
-                  onChange={(e) => {
-                    dirty.current.title = true;
-                    setTitle(e.target.value.slice(0, 60));
-                  }}
-                  placeholder={t.titlePlaceholder}
-                  className="w-full rounded-lg border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-bold outline-none hover:border-input focus:border-ring focus:ring-3 focus:ring-ring/30 md:text-base"
-                  disabled={loading}
-                />
-                <p className="mt-0.5 flex items-center gap-1.5 px-1.5 text-[11px] text-muted-foreground">
+                <p
+                  dir="auto"
+                  title={gtTitle}
+                  className="line-clamp-2 px-1.5 text-sm leading-snug font-bold md:text-base"
+                >
+                  {gtTitle || previewOk.displayName}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1.5 px-1.5 text-[11px] text-muted-foreground md:text-xs">
                   <PlatformIcon platform={previewOk.platform} className="size-3" />
                   {previewOk.displayName} · {platformLabel(previewOk.platform, lang)}
                 </p>
@@ -316,53 +299,29 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
                   target="_blank"
                   rel="noopener noreferrer"
                   dir="ltr"
-                  className="mt-0.5 block truncate px-1.5 text-[11px] text-primary hover:underline"
+                  className="mt-0.5 block truncate px-1.5 text-[11px] text-primary hover:underline md:text-xs"
                 >
                   {previewOk.href.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                 </a>
               </div>
             </div>
 
-            <label className="sr-only" htmlFor="preview-desc">
-              {t.descriptionLabel}
-            </label>
-            <textarea
-              id="preview-desc"
-              value={description}
-              onChange={(e) => {
-                dirty.current.desc = true;
-                setDescription(e.target.value.slice(0, 150));
-              }}
-              placeholder={t.descriptionPlaceholder}
-              rows={2}
-              className="mt-3 w-full resize-none rounded-xl border border-input bg-transparent px-3 py-2 text-xs leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
-              disabled={loading}
-            />
-            <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground/80">
-              <span>{t.previewEditableNote}</span>
-              <span className="tabular-nums">{description.length}/150</span>
-            </div>
+            {gtDescription && (
+              <p
+                dir="auto"
+                title={gtDescription}
+                className="mt-3 line-clamp-3 px-1.5 text-xs leading-relaxed text-muted-foreground md:text-sm"
+              >
+                {gtDescription}
+              </p>
+            )}
 
-            <details className="mt-2 px-1 text-[11px] text-muted-foreground">
-              <summary className="cursor-pointer font-medium hover:text-foreground">
-                {t.imageLabel}
-              </summary>
-              <input
-                type="url"
-                dir="ltr"
-                value={imageUrl}
-                onChange={(e) => {
-                  dirty.current.image = true;
-                  setImageUrl(e.target.value);
-                }}
-                placeholder="https://…"
-                className="mt-1.5 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                disabled={loading}
-              />
-            </details>
+            <p className="mt-2.5 px-1.5 text-[11px] text-muted-foreground">
+              {t.previewSourceNote}
+            </p>
 
             {fetchedNothing && (
-              <p className="mt-2 px-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 px-1.5 text-[11px] leading-relaxed text-muted-foreground">
                 {t.fetchFailedNote}
               </p>
             )}

@@ -126,7 +126,7 @@ is_provider_url() { echo "$1" | grep -q 'dodopayments'; }
 
 # 4a. new listing at top+1 → ACCEPTED and takes #1 (highest bid = highest rank)
 R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1)),\"title\":\"Smoke Site\",\"description\":\"smoke\"}")
+  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1))}")
 if echo "$R" | grep -q 'dodopayments'; then
   PAYMENT_MODE=1
   echo "  ⚠ payment mode (real provider) — stateful checks need webhooks, skipping"

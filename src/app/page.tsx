@@ -1,5 +1,5 @@
 import { HomeClient } from "@/components/home-client";
-import { getActivity, getLeaderboard, getStats, getTrending, getTopListing } from "@/lib/store";
+import { getActivity, getLeaderboard, getStats, getTrending } from "@/lib/store";
 import { isPlatformFilter, type PlatformFilter } from "@/lib/platforms";
 
 export const dynamic = "force-dynamic";
@@ -18,18 +18,17 @@ export default async function Home({
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const platform: PlatformFilter = isPlatformFilter(params.platform) ? params.platform : "all";
 
-  const [board, trending, activity, stats, top] = await Promise.all([
+  const [board, trending, activity, stats] = await Promise.all([
     getLeaderboard(page, platform),
     SHOW_SIDE_CARDS ? getTrending(5) : Promise.resolve([]),
     SHOW_SIDE_CARDS ? getActivity(5) : Promise.resolve([]),
     getStats(),
-    getTopListing(),
   ]);
 
   return (
     <HomeClient
       showSideCards={SHOW_SIDE_CARDS}
-      initial={{ board, page, platform, trending, activity, stats, topUrl: top?.url ?? null }}
+      initial={{ board, page, platform, trending, activity, stats }}
     />
   );
 }

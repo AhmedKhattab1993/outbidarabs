@@ -74,7 +74,7 @@ function hostMatches(host: string, target: string): boolean {
 export type NormalizedIdentity = {
   ok: true;
   url: string;           // canonical key: platform-canonical URL, params stripped
-  display_name: string;  // default title before smart-fetch / user edit
+  display_name: string;  // default title before smart-fetch
   href: string;          // where clicks go (clean canonical URL)
   platform: Platform;
 };

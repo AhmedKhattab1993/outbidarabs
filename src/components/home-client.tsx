@@ -23,7 +23,6 @@ type InitialData = {
   trending: TrendingItem[];
   activity: ActivityItem[];
   stats: SiteStats;
-  topUrl: string | null;
 };
 
 export function HomeClient({
@@ -148,7 +147,7 @@ export function HomeClient({
             </p>
           </section>
 
-          <ClaimForm topBid={board.topBid} topUrl={initial.topUrl} />
+          <ClaimForm topBid={board.topBid} />
 
           {/* ── Board ── */}
           <div>

@@ -15,42 +15,11 @@ const usd = (n: number) => "$" + n.toLocaleString("en-US");
 // ALLOW_MOCK_PAYMENTS=true (local only — Vercel production never sets it).
 const MOCK_PAYMENTS = MOCK_MODE || process.env.ALLOW_MOCK_PAYMENTS === "true";
 
-// ── Client-provided preview edits (from the preview card) ──
-// Sanitized server-side; empty/oversized values are dropped and the
-// server-side fetch (or the existing listing) is used instead.
-
-function cleanTitle(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined;
-  const s = v.replace(/\s+/g, " ").trim().slice(0, 60);
-  return s || undefined;
-}
-
-function cleanDescription(v: unknown): string | null | undefined {
-  if (typeof v !== "string") return undefined;
-  const s = v.replace(/\s+/g, " ").trim().slice(0, 150);
-  return s || null;
-}
-
-function cleanImage(v: unknown): string | null | undefined {
-  if (typeof v !== "string") return undefined;
-  const s = v.trim().slice(0, 480);
-  if (!s) return null;
-  try {
-    const u = new URL(s);
-    return (u.protocol === "https:" || u.protocol === "http:") ? u.toString() : null;
-  } catch {
-    return undefined; // not a URL → ignore, fall back to fetch/existing
-  }
-}
-
 export async function POST(req: NextRequest) {
   let body: {
     identity?: string;
     amount?: number;
     platform?: string;
-    title?: string;
-    description?: string;
-    imageUrl?: string;
   };
   try {
     body = await req.json();
@@ -95,20 +64,16 @@ export async function POST(req: NextRequest) {
   // Charge only the difference when raising an existing listing.
   const charge = existing ? amount - existing.bid_amount : amount;
 
-  // Listing metadata: client edits (preview card) → existing values → server fetch.
-  const clientTitle = cleanTitle(body.title);
-  const clientDesc = cleanDescription(body.description);
-  const clientImage = cleanImage(body.imageUrl);
-  const needsFetch =
-    (!clientTitle || clientDesc === undefined || clientImage === undefined) && !existing;
-  const meta = needsFetch
-    ? await fetchListingMeta(identity.platform, identity.url, identity.href)
-    : { title: null, description: null, image: null };
+  // Listing metadata: existing values → server-side fetch (cached, already
+  // sanitized to display/bio limits in fetch-meta) → raw handle. The preview
+  // card is view-only ground truth, so nothing comes from the client.
+  const meta = existing
+    ? { title: null, description: null, image: null }
+    : await fetchListingMeta(identity.platform, identity.url, identity.href);
 
-  const displayName = clientTitle ?? existing?.display_name ?? identity.display_name;
-  const description =
-    clientDesc !== undefined ? clientDesc : (existing?.description ?? meta.description);
-  const image = clientImage !== undefined ? clientImage : (existing?.image_url ?? meta.image);
+  const displayName = existing?.display_name ?? meta.title ?? identity.display_name;
+  const description = existing?.description ?? meta.description ?? null;
+  const image = existing?.image_url ?? meta.image ?? null;
 
   // ── Mock checkout: apply immediately and land on success ──
   if (MOCK_PAYMENTS) {
@@ -143,7 +108,7 @@ export async function POST(req: NextRequest) {
   const metadata: Record<string, string> = {
     env: paymentsEnvTag(), // webhook applies only payments from this environment
     identity_url: identity.url,
-    display_name: displayName,
+    display_name: displayName.slice(0, 480),
     platform: identity.platform,
     target_url: identity.href.slice(0, 480),
     amount: String(amount), // intended new total bid

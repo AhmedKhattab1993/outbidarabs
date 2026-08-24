@@ -323,8 +323,8 @@ Add all env vars from `.env.example` in the project settings and point
 ## Smart fetching (preview card)
 
 When an input is detected, `/api/preview` fetches public data for the card
-(best effort — never blocks, 4.5s timeout, 10-minute server cache, and the user
-can always edit title/description/image manually):
+(best effort — never blocks, 4.5s timeout, 10-minute server cache; the card is
+view-only and shows what the platform returned, falling back to the handle):
 
 | Platform | Source | Gets |
 |---|---|---|
@@ -337,7 +337,7 @@ can always edit title/description/image manually):
 | LinkedIn | page OG tags (usually login-walled) | best effort |
 
 Failed/generic fetches return `meta: null` → the card falls back to the platform
-icon + handle with everything editable, exactly as the spec requires.
+icon + handle (view-only ground truth, exactly as the spec requires).
 
 ## Parity with the reference
 
@@ -345,16 +345,18 @@ icon + handle with everything editable, exactly as the spec requires.
 - Platform filter pills (All | Instagram | TikTok | X | LinkedIn | Website | App)
   + platform badge on every listing avatar
 - Earnings card ("The Arab outbid board has made $X since its launch…")
-- Real images: smart-fetch avatar/icon captured at submission (editable in the
-  preview card) → favicon → letter fallback
+- Real images: smart-fetch avatar/icon captured at submission (read-only in the
+  preview card; metadata always comes from the server) → favicon → letter fallback
 - Clicks redirect through `/go/[id]` with `utm_source=outbidarabs` appended
 - Live "online" counter via presence heartbeats (75s window)
 - Public analytics dashboard: `see stats →` pill + footer `Live stats` link to
   `NEXT_PUBLIC_ANALYTICS_URL` (reference uses Vemetric public dashboards);
   provider script injected via `NEXT_PUBLIC_ANALYTICS_SCRIPT_URL` +
   `NEXT_PUBLIC_ANALYTICS_SITE_ID` (DataFast, Vemetric, Plausible — any)
-- Claim-form UX: detection → platform chips for ambiguous handles → preview
-  card with editable title/description/image + cleaned destination URL;
+- Claim-form UX: detection → platform chips for ambiguous handles → view-only
+  preview card showing name/bio/avatar fetched from the platform + cleaned
+  destination URL; metadata is decided server-side (existing listing or
+  server-side fetch), never client edits;
   typing an existing account shows "Already on the board at $X. Checkout only
   charges the $N difference.", the button relabels to "Pay $N more"
 - Claim price pill on every row: bid + $1 (any bid above the holder takes it)

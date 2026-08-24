@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Webhook } from "standardwebhooks";
 import { applyPaidCheckout } from "@/lib/apply-payment";
+import { paymentsEnvTag } from "@/lib/payments-env";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,20 @@ export async function POST(req: Request) {
   const data = event.data ?? {};
   const metadata: Record<string, string> = data.metadata ?? {};
   const orderId = data.payment_id ?? data.id ?? `dodo_${Date.now()}`;
+
+  // Dodo test mode fans every event out to all registered endpoints (staging,
+  // production, local tunnels). Apply only the payments created by this
+  // deployment's checkout; 200 so Dodo doesn't retry the other environments'
+  // events here. Untagged = pre-guard checkout session → skip everywhere that
+  // isn't local (test sessions expire; no live sessions predate the guard).
+  const own = paymentsEnvTag();
+  const tag = metadata.env;
+  const allowed = tag === own || (tag === undefined && own === "local");
+  if (!allowed) {
+    console.log("webhook skipped (env mismatch)", { tag, own, orderId });
+    return NextResponse.json({ received: true, ok: false, skipped: "env_mismatch" });
+  }
+
   const result = await applyPaidCheckout(metadata, String(orderId));
   return NextResponse.json({ received: true, ok: result.ok });
 }

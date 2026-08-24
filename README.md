@@ -118,6 +118,17 @@ on the board with the new rank. With Layer 2 running, also confirm in the local
 Supabase Studio that `processed_checkouts` has the payment id, `activity` has
 the row, and `site_stats.total_revenue` grew by the paid delta.
 
+⚠️ **Test-mode webhooks fan out to every endpoint on the Dodo account.** Dodo
+delivers each `payment.succeeded` to *all* test-mode endpoints — staging,
+`outbidarabs.lol` and any local tunnel all receive everything, so a payment
+made anywhere applies everywhere unless gated. Two protections are in place:
+1. every checkout carries `metadata.env` (`local`/`staging`/`prod`, from
+   `VERCEL_ENV` — see `src/lib/payments-env.ts`) and each webhook applies
+   only events tagged for its own environment (skips return 200, no retry);
+2. the test-mode endpoint pointing at `outbidarabs.lol` is **disabled** on the
+   Dodo account — re-enable it only if prod must accept test payments again
+   (not needed for live: live mode uses its own endpoints/keys).
+
 **Simulating Dodo webhooks locally** — `scripts/simulate-dodo-webhook.mjs` signs a
 `payment.succeeded` payload exactly like Dodo (Standard Webhooks HMAC-SHA256)
 and drives the full path without a browser payment:

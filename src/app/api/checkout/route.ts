@@ -4,6 +4,7 @@ import { applyPaidListing, getListingByUrl, getTopListing, MOCK_MODE } from "@/l
 import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { fetchListingMeta } from "@/lib/fetch-meta";
 import { isPlatform } from "@/lib/platforms";
+import { paymentsEnvTag } from "@/lib/payments-env";
 import DodoPayments from "dodopayments";
 
 export const dynamic = "force-dynamic";
@@ -140,6 +141,7 @@ export async function POST(req: NextRequest) {
 
   // Metadata is read back by the webhook to apply the listing. Empty values omitted.
   const metadata: Record<string, string> = {
+    env: paymentsEnvTag(), // webhook applies only payments from this environment
     identity_url: identity.url,
     display_name: displayName,
     platform: identity.platform,

@@ -51,6 +51,7 @@ const data = {
   status: "succeeded",
   amount: charge * 100,
   metadata: {
+    env: process.env.SMOKE_ENV_TAG || "local", // must match the target's paymentsEnvTag()
     identity_url: identityUrl,
     display_name: "Dodo Sim Listing",
     platform: "website",

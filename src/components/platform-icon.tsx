@@ -85,14 +85,49 @@ export function PlatformIcon({
 }
 
 // Brand colors for the badge variant (recognizable at small sizes).
+// TikTok is special-cased below: real brand mark is a white note with
+// cyan/red duotone shadows on black, not a solid fill.
 const BADGE_COLORS: Record<Platform, string> = {
   instagram: "#d6336c",
-  tiktok: "#fe2c55",
+  tiktok: "#000000",
   x: "#0f0f0f",
   linkedin: "#0a66c2",
   website: "#6b7280",
   app: "#0f9d58",
 };
+
+const TIKTOK_CYAN = "#25f4ee";
+const TIKTOK_RED = "#fe2c55";
+
+/** TikTok duotone note: cyan + red offset shadows under a white note. */
+function TikTokDuoGlyph() {
+  const note = (
+    <>
+      <path d="M9.5 18.2V5.2l10.5-1.9v10.4" />
+      <circle cx="6.6" cy="18.2" r="2.9" />
+      <circle cx="17.1" cy="15.2" r="2.9" />
+    </>
+  );
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="size-[62%]"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <g stroke={TIKTOK_CYAN} transform="translate(-0.8 -0.8)">
+        {note}
+      </g>
+      <g stroke={TIKTOK_RED} transform="translate(0.8 0.8)">
+        {note}
+      </g>
+      <g stroke="#ffffff">{note}</g>
+    </svg>
+  );
+}
 
 /** Small rounded-square badge with the platform glyph — sits on avatars/cards. */
 export function PlatformBadge({
@@ -113,7 +148,11 @@ export function PlatformBadge({
       }
       style={{ backgroundColor: BADGE_COLORS[platform] }}
     >
-      <PlatformIcon platform={platform} className="size-[62%] text-white" strokeWidth={2.2} />
+      {platform === "tiktok" ? (
+        <TikTokDuoGlyph />
+      ) : (
+        <PlatformIcon platform={platform} className="size-[62%] text-white" strokeWidth={2.2} />
+      )}
     </span>
   );
 }

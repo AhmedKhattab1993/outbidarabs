@@ -137,9 +137,12 @@ async function fetchJson(url: string, headers?: Record<string, string>): Promise
   }
 }
 
-async function fetchHtml(url: string): Promise<string | null> {
+async function fetchHtml(
+  url: string,
+  headers?: Record<string, string>
+): Promise<string | null> {
   try {
-    const res = await fetchResilient(url);
+    const res = await fetchResilient(url, headers);
     if (!res || !res.ok) return null;
     // Some pages (Google Play) inline ~1MB of JSON before the og: tags.
     return (await res.text()).slice(0, 2_000_000);
@@ -149,13 +152,14 @@ async function fetchHtml(url: string): Promise<string | null> {
 }
 
 function htmlMeta(html: string, prop: string): string | null {
+  // [^"<>] (not [^"']) so apostrophes inside values ("I'm …") don't truncate
   const m = html.match(
-    new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']{2,600})["']`, "i")
+    new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"<>]{2,600})["']`, "i")
   );
   if (m) return decodeHtmlEntities(m[1]);
   // reversed attribute order (content before property)
   const m2 = html.match(
-    new RegExp(`<meta[^>]+content=["']([^"']{2,600})["'][^>]+(?:property|name)=["']${prop}["']`, "i")
+    new RegExp(`<meta[^>]+content=["']([^"<>]{2,600})["'][^>]+(?:property|name)=["']${prop}["']`, "i")
   );
   return m2 ? decodeHtmlEntities(m2[1]) : null;
 }
@@ -262,8 +266,25 @@ async function fetchTikTok(identityUrl: string): Promise<ListingMeta> {
 
 async function fetchX(identityUrl: string): Promise<ListingMeta> {
   const username = handleOf(identityUrl);
-  // Public oEmbed. Profile URLs return a timeline widget without
-  // author_name — the display name lives in the embed HTML ("Posts by X").
+  // X's logged-out profile page carries og:title ("Name (@handle) on X"),
+  // og:description (bio) and og:image (real avatar) — verified from the
+  // Vercel runtime. Browser UA keeps the full meta set served.
+  const html = await fetchHtml(`https://x.com/${username}`, {
+    "user-agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "accept-language": "en-US,en;q=0.9",
+  });
+  if (html) {
+    const ogTitle = htmlMeta(html, "og:title");
+    const name = ogTitle?.match(/^(.+?)\s*\(@[^)]*\)\s*on X$/i)?.[1] ?? ogTitle;
+    const meta = {
+      title: clampTitle(name ?? null),
+      description: clampDesc(htmlMeta(html, "og:description")),
+      image: resolveUrl(htmlMeta(html, "og:image"), `https://x.com/${username}`),
+    };
+    if (meta.title || meta.image) return meta;
+  }
+  // Fallback: public oEmbed (display name only, no avatar).
   const j = await fetchJson(
     `https://publish.x.com/oembed?url=${encodeURIComponent(`https://x.com/${username}`)}`
   );

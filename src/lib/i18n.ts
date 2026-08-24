@@ -19,7 +19,14 @@ export const dict = {
     headlineTagline: "أعلى عرض = المركز الأول",
     supporting:
       "ادفع عشان حسابك يبقى في الصدارة. إنستجرام وتيك توك أولاً — المواقع والتطبيقات مدعومة كمان.",
-    placeholder: "أدخل حساب إنستجرام، تيك توك، إكس، لينكدإن، موقع، أو تطبيق",
+    inputPlaceholder: {
+      instagram: "@username أو instagram.com/username",
+      tiktok: "@username أو tiktok.com/@username",
+      x: "@handle أو x.com/handle",
+      linkedin: "linkedin.com/in/username",
+      website: "example.com",
+      app: "رابط App Store أو Google Play",
+    },
     startsFrom: "البدايات من",
     anyBidTakesIt: "أي مزايدة أعلى من صاحب المركز تاخد مكانه فوراً.",
     outbid: "زايد",
@@ -40,7 +47,10 @@ export const dict = {
     // ── Preview card ──
     detecting: "جارٍ التعرف على الرابط…",
     fetchingPreview: "جارٍ جلب بيانات الحساب…",
-    choosePlatform: "هو حساب أنهي منصة؟",
+    platformAutoFromLink: "المنصة تتحدد تلقائياً من الرابط",
+    handleMismatch: (p: Platform) =>
+      `المعرّف ده لا يناسب ${platformLabel(p, "ar")} — تأكد منه أو الصق الرابط الكامل`,
+    needsUrl: (p: Platform) => `عشان ${platformLabel(p, "ar")} الصق الرابط الكامل`,
     previewEditableNote: "تقدر تعدّل العنوان والوصف والصورة قبل الدفع.",
     titleLabel: "العنوان",
     titlePlaceholder: "عنوان القائمة",
@@ -130,7 +140,14 @@ export const dict = {
     headlineTagline: "Highest bid = #1",
     supporting:
       "Pay to put your account at the top. Instagram & TikTok first — websites and apps are supported too.",
-    placeholder: "Enter an Instagram, TikTok, X, LinkedIn account, website, or app",
+    inputPlaceholder: {
+      instagram: "@username or instagram.com/username",
+      tiktok: "@username or tiktok.com/@username",
+      x: "@handle or x.com/handle",
+      linkedin: "linkedin.com/in/username",
+      website: "example.com",
+      app: "App Store or Google Play link",
+    },
     startsFrom: "Starting from",
     anyBidTakesIt: "Any bid above the current holder takes the spot instantly.",
     outbid: "Outbid",
@@ -151,7 +168,10 @@ export const dict = {
     // ── Preview card ──
     detecting: "Detecting the link…",
     fetchingPreview: "Fetching account data…",
-    choosePlatform: "Which platform is this account on?",
+    platformAutoFromLink: "Platform is auto-detected from the link",
+    handleMismatch: (p: Platform) =>
+      `That handle doesn't fit ${platformLabel(p, "en")} — check it or paste the full link`,
+    needsUrl: (p: Platform) => `Paste the full link for ${platformLabel(p, "en")}`,
     previewEditableNote: "You can edit the title, description, and image before paying.",
     titleLabel: "Title",
     titlePlaceholder: "Listing title",

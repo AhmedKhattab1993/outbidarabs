@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/lang-context";
 import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { identityErrorMessages, normalizeIdentity } from "@/lib/identity";
-import { platformLabel, type Platform } from "@/lib/platforms";
+import { HANDLE_CANDIDATES, detectPlatform, platformLabel, type Platform } from "@/lib/platforms";
 import { trackEvent } from "@/lib/analytics";
 import { PlatformIcon, PlatformBadge } from "@/components/platform-icon";
+import { PlatformSelect } from "@/components/platform-select";
 import { Avatar } from "@/components/avatar";
 
 const stepperBtn =
@@ -34,7 +35,9 @@ type PreviewState =
 export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string | null }) {
   const { t, lang } = useLang();
   const [identity, setIdentity] = useState("");
-  const [platformChoice, setPlatformChoice] = useState<Platform | null>(null);
+  // Platform picked in the dropdown next to the input (used to resolve bare
+  // handles). Full links override it via auto-detection below.
+  const [platformChoice, setPlatformChoice] = useState<Platform>("instagram");
   const [preview, setPreview] = useState<PreviewState>(null);
   const [fetching, setFetching] = useState(false);
   const [title, setTitle] = useState("");
@@ -49,6 +52,14 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   const fetchSeq = useRef(0);
 
   const previewOk = preview?.kind === "ok" ? preview.data : null;
+
+  // A full link always determines its own platform — the dropdown follows it
+  // automatically (and locks). Bare handles use the dropdown's selection.
+  const autoPlatform = useMemo(() => {
+    const d = detectPlatform(identity.trim());
+    return d.kind === "platform" ? d.platform : null;
+  }, [identity]);
+  const effectivePlatform = autoPlatform ?? platformChoice;
 
   // Keep the suggested #1 price in sync when the board changes and the user
   // hasn't touched the stepper yet (#1 = any bid above the current top).
@@ -68,7 +79,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
     }
 
     // Instant client-side detection for immediate feedback
-    const local = normalizeIdentity(v, platformChoice ?? undefined);
+    const local = normalizeIdentity(v, effectivePlatform);
     if (local.ok) {
       setPreview((prev) =>
         prev?.kind === "ok" && prev.data.url === local.url
@@ -86,7 +97,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
     const tm = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ identity: v });
-        if (platformChoice) params.set("platform", platformChoice);
+        params.set("platform", effectivePlatform);
         const r = await fetch(`/api/preview?${params}`, { cache: "no-store" });
         if (!r.ok || seq !== fetchSeq.current) return;
         const d = await r.json();
@@ -106,7 +117,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
     }, 450);
     return () => clearTimeout(tm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, platformChoice]);
+  }, [identity, effectivePlatform]);
 
   // Fill editable fields from the fetched preview (never overwrite user edits)
   const lastUrl = useRef<string | null>(null);
@@ -154,8 +165,8 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   const value = parseInt(amount, 10) || 0;
   const existing = previewOk?.existing ?? null;
   const diff = existing && value > existing.bid_amount ? value - existing.bid_amount : 0;
-  const detectedPlatform = previewOk?.platform ?? null;
   const fetchedNothing = previewOk != null && previewOk.meta == null && !fetching;
+
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,7 +199,7 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           identity,
-          platform: platformChoice ?? detectedPlatform ?? undefined,
+          platform: effectivePlatform,
           amount: value,
           title: title || undefined,
           description: description || undefined,
@@ -219,36 +230,36 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
   return (
     <section id="claim" className="scroll-mt-6">
       <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-        {/* ── Single input ── */}
-        <div className="relative min-w-0 flex-1">
-          <span className="pointer-events-none absolute top-1/2 start-3 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            {detectedPlatform ? (
-              <PlatformIcon platform={detectedPlatform} className="size-4" />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-4">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            )}
-          </span>
+        {/* ── Input with platform dropdown ── */}
+        <div className="relative flex h-12 items-stretch rounded-2xl border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
+          <PlatformSelect
+            value={effectivePlatform}
+            onChange={setPlatformChoice}
+            lang={lang}
+            disabled={loading || autoPlatform != null}
+            autoDetected={autoPlatform != null}
+            autoTitle={t.platformAutoFromLink}
+          />
           <input
             id="identity"
-            placeholder={t.placeholder}
+            placeholder={t.inputPlaceholder[effectivePlatform]}
             autoComplete="off"
             spellCheck={false}
             required
             dir="ltr"
-            className="h-12 w-full min-w-0 rounded-2xl border border-input bg-transparent px-3 py-1 text-center text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 ps-12 pe-12"
+            className="h-full min-w-0 flex-1 bg-transparent px-3 pe-10 text-center text-base outline-none placeholder:text-muted-foreground"
             value={identity}
             onChange={(e) => {
               setIdentity(e.target.value);
-              setPlatformChoice(null);
               setError(null);
             }}
             disabled={loading}
           />
           {fetching && (
-            <span className="absolute top-1/2 end-3 -translate-y-1/2 text-muted-foreground" aria-hidden="true">
+            <span
+              className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            >
               <svg viewBox="0 0 24 24" fill="none" className="size-4 animate-spin">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" className="opacity-25" />
                 <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
@@ -257,26 +268,13 @@ export function ClaimForm({ topBid, topUrl }: { topBid: number; topUrl: string |
           )}
         </div>
 
-        {/* ── Ambiguity: platform selector chips ── */}
+        {/* ── Handle doesn't fit the picked platform / platform needs a URL ── */}
         {preview?.kind === "ambiguous" && (
-          <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
-            <p className="mb-2 text-center text-xs font-semibold text-foreground">
-              {t.choosePlatform}
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              {preview.candidates.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPlatformChoice(p)}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-card px-3.5 py-2 text-xs font-bold text-foreground transition-colors hover:border-primary hover:bg-primary/10"
-                >
-                  <PlatformIcon platform={p} className="size-4" />
-                  {platformLabel(p, lang)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="text-center text-xs leading-relaxed text-muted-foreground text-pretty">
+            {HANDLE_CANDIDATES.includes(effectivePlatform)
+              ? t.handleMismatch(effectivePlatform)
+              : t.needsUrl(effectivePlatform)}
+          </p>
         )}
 
         {/* ── Preview card ── */}

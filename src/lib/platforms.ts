@@ -74,7 +74,8 @@ export function detectPlatform(input: string): Detection {
       if (host === "apps.apple.com" || host === "play.google.com" || host === "itunes.apple.com") return { kind: "platform", platform: "app" };
       // Any other absolute URL → website (final call happens in normalizeIdentity)
       if (/^https?:\/\//i.test(raw)) return { kind: "platform", platform: "website" };
-      return { kind: "none" }; // maybe a bare domain — let normalizeIdentity decide
+      // Bare domain ("example.com") — normalizeIdentity treats it as a website URL
+      return { kind: "platform", platform: "website" };
     }
   } catch {
     /* fall through */

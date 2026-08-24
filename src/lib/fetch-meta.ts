@@ -10,6 +10,10 @@
 //  - linkedin: page OG tags (usually login-walled → clean fallback)
 
 import type { Platform } from "@/lib/platforms";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileP = promisify(execFile);
 
 export type ListingMeta = {
   title: string | null;       // full name / app name / site title
@@ -18,13 +22,18 @@ export type ListingMeta = {
 };
 
 const FETCH_TIMEOUT_MS = 4500;
+const FETCH_RETRIES = 1; // one retry on 429/5xx/network errors (transient upstream throttling)
+const RETRY_DELAY_MS = 700;
 const CACHE_TTL_MS = 10 * 60_000;
 const CACHE_MAX = 300;
+// Failed fetches are remembered briefly so typing bursts don't hammer the
+// upstream platform while the user edits the same handle.
+const NEG_CACHE_TTL_MS = 60_000;
 
 const UA =
   "Mozilla/5.0 (compatible; outbidarabs/2.0; +https://outbidarabs.lol) AppleWebKit/537.36";
 
-type CacheEntry = { expires: number; value: ListingMeta };
+type CacheEntry = { expires: number; value: ListingMeta | null };
 const cacheStore = globalThis as unknown as {
   __metaCache?: Map<string, CacheEntry>;
 };
@@ -33,23 +42,26 @@ function cache(): Map<string, CacheEntry> {
   return cacheStore.__metaCache;
 }
 
-function cacheGet(key: string): ListingMeta | null {
+function cacheGet(key: string): ListingMeta | null | undefined {
   const hit = cache().get(key);
-  if (!hit) return null;
+  if (!hit) return undefined; // not seen before
   if (hit.expires < Date.now()) {
     cache().delete(key);
-    return null;
+    return undefined;
   }
-  return hit.value;
+  return hit.value; // null = recently failed
 }
 
-function cacheSet(key: string, value: ListingMeta): void {
+function cacheSet(key: string, value: ListingMeta | null): void {
   const c = cache();
   if (c.size >= CACHE_MAX) {
     // drop the oldest entry (Map preserves insertion order)
     c.delete(c.keys().next().value as string);
   }
-  c.set(key, { expires: Date.now() + CACHE_TTL_MS, value });
+  c.set(key, {
+    expires: Date.now() + (value ? CACHE_TTL_MS : NEG_CACHE_TTL_MS),
+    value,
+  });
 }
 
 async function fetchWithTimeout(url: string, headers?: Record<string, string>) {
@@ -66,10 +78,59 @@ async function fetchWithTimeout(url: string, headers?: Record<string, string>) {
   }
 }
 
+/** Fetch with one retry on 429/5xx — platforms throttle in bursts. */
+async function fetchResilient(
+  url: string,
+  headers?: Record<string, string>
+): Promise<Response | null> {
+  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, headers);
+    } catch {
+      if (attempt === FETCH_RETRIES) return null;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      continue;
+    }
+    if ((res.status === 429 || res.status >= 500) && attempt < FETCH_RETRIES) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      continue;
+    }
+    return res;
+  }
+  return null;
+}
+
+/** Fetch JSON via the system curl binary. Instagram's WAF 429s node's
+ *  fetch TLS fingerprint on datacenter IPs but allows curl's — so the
+ *  Instagram path shells out when curl is available. */
+async function curlJson(
+  url: string,
+  headers: Record<string, string>
+): Promise<any | null> {
+  try {
+    const args = [
+      "-s", "--compressed", "-m", "6", "-w", "\n%{http_code}",
+      ...Object.entries(headers).flatMap(([k, v]) => ["-H", `${k}: ${v}`]),
+      url,
+    ];
+    const { stdout } = await execFileP("curl", args, {
+      timeout: FETCH_TIMEOUT_MS + 2500,
+      maxBuffer: 5 * 1024 * 1024,
+    });
+    const lines = stdout.trimEnd().split("\n");
+    const status = parseInt(lines.pop() ?? "", 10);
+    if (!Number.isFinite(status) || status >= 400) return null;
+    return JSON.parse(lines.join("\n"));
+  } catch {
+    return null; // curl missing / non-JSON / timeout → caller falls back to fetch
+  }
+}
+
 async function fetchJson(url: string, headers?: Record<string, string>): Promise<any | null> {
   try {
-    const res = await fetchWithTimeout(url, headers);
-    if (!res.ok) return null;
+    const res = await fetchResilient(url, headers);
+    if (!res || !res.ok) return null;
     return await res.json();
   } catch {
     return null;
@@ -78,8 +139,8 @@ async function fetchJson(url: string, headers?: Record<string, string>): Promise
 
 async function fetchHtml(url: string): Promise<string | null> {
   try {
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) return null;
+    const res = await fetchResilient(url);
+    if (!res || !res.ok) return null;
     // Some pages (Google Play) inline ~1MB of JSON before the og: tags.
     return (await res.text()).slice(0, 2_000_000);
   } catch {
@@ -143,18 +204,21 @@ function handleOf(identityUrl: string): string {
 
 async function fetchInstagram(identityUrl: string): Promise<ListingMeta> {
   const username = handleOf(identityUrl);
-  // Phase 3 best-effort: the web app's own profile endpoint (public app id).
-  const j = await fetchJson(
-    `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
-    { "x-ig-app-id": "936619743392459", accept: "*/*" }
-  );
-  const user = j?.data?.user;
-  if (user) {
-    return {
-      title: clampTitle(user.full_name || null),
-      description: clampDesc(user.biography ?? null),
-      image: user.profile_pic_url ?? null,
-    };
+  // The web app's own profile endpoint (public app id). Node's fetch gets
+  // 429'd by TLS fingerprint on datacenter IPs — go through curl first, then
+  // plain fetch, across both API hosts before giving up.
+  for (const host of ["i.instagram.com", "www.instagram.com"]) {
+    const api = `https://${host}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
+    const igHeaders = { "x-ig-app-id": "936619743392459", accept: "*/*" };
+    const j = (await curlJson(api, igHeaders)) ?? (await fetchJson(api, igHeaders));
+    const user = j?.data?.user;
+    if (user) {
+      return {
+        title: clampTitle(user.full_name || null),
+        description: clampDesc(user.biography ?? null),
+        image: user.profile_pic_url ?? null,
+      };
+    }
   }
   // Fallback: profile page OG tags.
   const html = await fetchHtml(`https://www.instagram.com/${username}/`);
@@ -198,12 +262,17 @@ async function fetchTikTok(identityUrl: string): Promise<ListingMeta> {
 
 async function fetchX(identityUrl: string): Promise<ListingMeta> {
   const username = handleOf(identityUrl);
-  // Public oEmbed: author_name carries the display name for profile URLs.
+  // Public oEmbed. Profile URLs return a timeline widget without
+  // author_name — the display name lives in the embed HTML ("Posts by X").
   const j = await fetchJson(
-    `https://publish.twitter.com/oembed?url=${encodeURIComponent(`https://x.com/${username}`)}`
+    `https://publish.x.com/oembed?url=${encodeURIComponent(`https://x.com/${username}`)}`
   );
+  let title: string | null = j?.author_name ?? null;
+  if (!title && typeof j?.html === "string") {
+    title = j.html.match(/Posts by (.+?)<\/?/)?.[1] ?? null;
+  }
   return {
-    title: clampTitle(j?.author_name ?? null),
+    title: clampTitle(title),
     description: null,
     image: null,
   };
@@ -281,7 +350,7 @@ export async function fetchListingMeta(
 ): Promise<ListingMeta> {
   const key = `${platform}:${identityUrl}`;
   const hit = cacheGet(key);
-  if (hit) return hit;
+  if (hit !== undefined) return hit ?? { title: null, description: null, image: null };
 
   let meta: ListingMeta = { title: null, description: null, image: null };
   try {
@@ -309,7 +378,7 @@ export async function fetchListingMeta(
     meta = { title: null, description: null, image: null };
   }
 
-  // Cache only real successes so failures retry next time.
-  if (meta.title || meta.description || meta.image) cacheSet(key, meta);
+  // Cache successes long, failures briefly (so bursts don't hammer upstream).
+  cacheSet(key, meta.title || meta.description || meta.image ? meta : null);
   return meta;
 }

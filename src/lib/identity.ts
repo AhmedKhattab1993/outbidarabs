@@ -85,13 +85,16 @@ export type IdentityError = {
   candidates?: Platform[]; // for "ambiguous": platforms the handle could be
 };
 
-/** Raw handle part of the input, or null when the input isn't a bare handle. */
-function bareHandle(raw: string): string | null {
+/** Raw handle part of the input, or null when the input isn't a bare handle.
+ *  A dotted bare word ("khaby.lame") is only treated as a handle when the
+ *  user explicitly picked a handle platform — otherwise it stays a domain. */
+function bareHandle(raw: string, platformHint?: Platform): string | null {
   if (raw.includes("/") || raw.includes(" ") || raw.includes("@", 1)) return null;
   const m = raw.match(/^@?([A-Za-z0-9._]{1,30})$/);
   if (!m) return null;
-  // A bare word without @ must not look like a domain ("something.com")
-  if (!raw.startsWith("@") && raw.includes(".")) return null;
+  if (!raw.startsWith("@") && raw.includes(".")) {
+    return platformHint && HANDLE_CANDIDATES.includes(platformHint) ? m[1] : null;
+  }
   return m[1];
 }
 
@@ -103,7 +106,7 @@ export function normalizeIdentity(
   if (!raw) return { ok: false, reason: "empty" };
 
   // ── Bare @handle / username: needs a platform ──
-  const handle = bareHandle(raw);
+  const handle = bareHandle(raw, platformHint);
   if (handle != null) {
     const reason = moderateText(handle);
     if (reason) return { ok: false, reason };

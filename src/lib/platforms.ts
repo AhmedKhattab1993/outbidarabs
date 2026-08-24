@@ -73,9 +73,13 @@ export function detectPlatform(input: string): Detection {
       if (host === "linkedin.com") return { kind: "platform", platform: "linkedin" };
       if (host === "apps.apple.com" || host === "play.google.com" || host === "itunes.apple.com") return { kind: "platform", platform: "app" };
       // Any other absolute URL → website (final call happens in normalizeIdentity)
-      if (/^https?:\/\//i.test(raw)) return { kind: "platform", platform: "website" };
-      // Bare domain ("example.com") — normalizeIdentity treats it as a website URL
-      return { kind: "platform", platform: "website" };
+      if (/^https?:\/\//i.test(raw) || raw.includes("/")) {
+        return { kind: "platform", platform: "website" };
+      }
+      // Bare domain ("example.com") or dotted word ("khaby.lame") — ambiguous
+      // between "website" and "handle with dots"; normalizeIdentity resolves
+      // it using the user's explicit dropdown choice, so don't pre-empt it.
+      return { kind: "none" };
     }
   } catch {
     /* fall through */

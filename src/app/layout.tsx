@@ -4,6 +4,7 @@ import { DM_Sans, IBM_Plex_Sans_Arabic } from "next/font/google";
 import { cookies } from "next/headers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/lang-context";
+import { AuthProvider } from "@/lib/auth-context";
 import { getDict, type Lang } from "@/lib/i18n";
 import { Analytics } from "@/lib/analytics";
 import "./globals.css";
@@ -60,7 +61,9 @@ export default async function RootLayout({
         )}
         <Analytics />
         <ThemeProvider>
-          <LangProvider initialLang={lang}>{children}</LangProvider>
+          <LangProvider initialLang={lang}>
+            <AuthProvider>{children}</AuthProvider>
+          </LangProvider>
         </ThemeProvider>
       </body>
     </html>

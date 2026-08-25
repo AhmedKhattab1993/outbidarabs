@@ -15,11 +15,11 @@ export { PER_PAGE };
 let anonClient: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
 
-function supabase(): SupabaseClient {
+export function supabase(): SupabaseClient {
   if (!anonClient) anonClient = createClient(SUPABASE_URL!, SUPABASE_ANON!);
   return anonClient;
 }
-function supabaseAdmin(): SupabaseClient {
+export function supabaseAdmin(): SupabaseClient {
   if (!adminClient) {
     adminClient = createClient(SUPABASE_URL!, SERVICE_ROLE || SUPABASE_ANON!);
   }
@@ -31,6 +31,18 @@ function supabaseAdmin(): SupabaseClient {
 // Same rules engine as the SQL layer.
 // ───────────────────────────────────────────────────────────
 type MockListing = Listing & { clicks_per_hour: number };
+
+// Accounts mock store twin (see src/lib/accounts.ts): one row per applied
+// payment, keyed by checkout id — mirrors the Supabase `payments` table.
+export type MockPayment = {
+  checkout_id: string;
+  listing_id: string;
+  user_id: string | null;
+  payer_email: string;
+  amount: number;
+  created_at: string;
+  token: string | null; // pay_* cookie token (mock twin of checkout_tokens)
+};
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -86,6 +98,7 @@ const globalStore = globalThis as unknown as {
   __mockRevenue?: number;
   __mockProcessedOrders?: Set<string>;
   __mockPresence?: Map<string, number>;
+  __mockPayments?: MockPayment[];
 };
 
 function mockListings(): MockListing[] {
@@ -115,6 +128,35 @@ function mockRevenue(): number {
 function mockProcessed(): Set<string> {
   if (!globalStore.__mockProcessedOrders) globalStore.__mockProcessedOrders = new Set();
   return globalStore.__mockProcessedOrders;
+}
+
+/** Demo supporters on the seeded board so the drawer is demoable keyless.
+ *  Fictional like the rest of the mock seed — mock mode only. */
+const SEED_PAYERS: Array<[number, string, string, number, number]> = [
+  // listing seed index, payer email, display name, amount, minutes ago
+  [0, "salma@demo.local", "سلمى", 3200, 240],
+  [0, "yousef@demo.local", "يوسف", 2100, 180],
+  [0, "anonymous@local", "", 1400, 120],
+  [2, "salma@demo.local", "سلمى", 1800, 300],
+  [2, "anonymous@local", "", 900, 90],
+  [3, "yousef@demo.local", "يوسف", 1200, 60],
+];
+
+export function mockPayments(): MockPayment[] {
+  if (!globalStore.__mockPayments) {
+    const seedUsers = new Set(SEED_PAYERS.map((s) => s[1]));
+    seedUsers.delete(ANON_PAYER);
+    globalStore.__mockPayments = SEED_PAYERS.map((s, i) => ({
+      checkout_id: `seedpay-${i}`,
+      listing_id: `seed-${s[0]}`,
+      user_id: seedUsers.has(s[1]) ? `mock-user-${s[1].split("@")[0]}` : null,
+      payer_email: s[1],
+      amount: s[3],
+      created_at: new Date(Date.now() - s[4] * 60_000).toISOString(),
+      token: null,
+    }));
+  }
+  return globalStore.__mockPayments;
 }
 
 function sortBoard(listings: Listing[]): Listing[] {
@@ -340,6 +382,14 @@ export async function getListingByUrl(url: string): Promise<Listing | null> {
   return (data as Listing) ?? null;
 }
 
+export async function getListingById(id: string): Promise<Listing | null> {
+  if (MOCK_MODE) {
+    return mockListings().find((l) => l.id === id) ?? null;
+  }
+  const { data } = await supabase().from("listings").select("*").eq("id", id).maybeSingle();
+  return (data as Listing) ?? null;
+}
+
 /** Registers a click and returns the click-through href. */
 export async function registerClick(id: string): Promise<string | null> {
   if (MOCK_MODE) {
@@ -372,6 +422,9 @@ export type ApplyResult =
  *  - rank is recomputed and the activity feed gets a new row
  *  - idempotent per order/checkout id (webhooks can fire twice: confirmed + succeeded)
  */
+// Anonymous payments with no known payer email (pre-attribution grouping key).
+export const ANON_PAYER = "anonymous@local";
+
 export async function applyPaidListing(params: {
   url: string;
   platform?: Platform;
@@ -381,8 +434,11 @@ export async function applyPaidListing(params: {
   targetUrl?: string | null;
   amount: number; // intended new total bid
   orderId: string;
+  payerEmail?: string | null; // records the payment row (supporters list)
+  userId?: string | null; // set when the payer was logged in at checkout
+  token?: string | null; // pay_* cookie token → checkout_tokens (cookie binding)
 }): Promise<ApplyResult> {
-  const { url, platform, displayName, description, imageUrl, targetUrl, amount, orderId } = params;
+  const { url, platform, displayName, description, imageUrl, targetUrl, amount, orderId, payerEmail, userId, token } = params;
   if (amount > MAX_BID) return { ok: false, reason: "over-max" };
   if (amount < MIN_BID) return { ok: false, reason: "too-low" };
 
@@ -402,6 +458,7 @@ export async function applyPaidListing(params: {
       if (imageUrl) existing.image_url = imageUrl;
       globalStore.__mockRevenue = mockRevenue() + delta;
       pushMockActivity(existing, list, nowIso);
+      recordMockPayment(orderId, existing.id, delta, payerEmail, userId, token);
       return { ok: true, listing: existing, isNew: false, paidDelta: delta, rank: rankOf(existing, list) };
     }
     const listing: MockListing = {
@@ -421,6 +478,7 @@ export async function applyPaidListing(params: {
     list.push(listing);
     globalStore.__mockRevenue = mockRevenue() + amount;
     pushMockActivity(listing, list, nowIso);
+    recordMockPayment(orderId, listing.id, amount, payerEmail, userId, token);
     return { ok: true, listing, isNew: true, paidDelta: amount, rank: rankOf(listing, list) };
   }
 
@@ -470,6 +528,7 @@ export async function applyPaidListing(params: {
       rank,
     });
     await addRevenue(db, delta);
+    await insertPaymentRow(db, orderId, updated.id, delta, payerEmail, userId, token);
     return { ok: true, listing: updated, isNew: false, paidDelta: delta, rank };
   }
 
@@ -496,7 +555,61 @@ export async function applyPaidListing(params: {
     rank,
   });
   await addRevenue(db, amount);
+  await insertPaymentRow(db, orderId, created.id, amount, payerEmail, userId, token);
   return { ok: true, listing: created, isNew: true, paidDelta: amount, rank };
+}
+
+/** payments row for every applied payment (supporters lists + attribution).
+ *  Failures are logged, never fatal — the listing apply already succeeded. */
+async function insertPaymentRow(
+  db: SupabaseClient,
+  orderId: string,
+  listingId: string,
+  amount: number,
+  payerEmail?: string | null,
+  userId?: string | null,
+  token?: string | null
+): Promise<void> {
+  const { error } = await db.from("payments").insert({
+    checkout_id: orderId,
+    listing_id: listingId,
+    user_id: userId ?? null,
+    payer_email: normalizeEmail(payerEmail) || ANON_PAYER,
+    amount,
+  });
+  if (error) console.error("payments insert failed", orderId, error.message);
+  // Cookie-binding token: keyed by the payment id, read back by
+  // /api/payment-status to reveal the payer email only to the paying browser.
+  if (token) {
+    const { error: tokErr } = await db
+      .from("checkout_tokens")
+      .upsert({ checkout_id: orderId, token }, { onConflict: "checkout_id", ignoreDuplicates: true });
+    if (tokErr) console.error("checkout token insert failed", orderId, tokErr.message);
+  }
+}
+
+/** Mock-store twin of insertPaymentRow. */
+function recordMockPayment(
+  orderId: string,
+  listingId: string,
+  amount: number,
+  payerEmail?: string | null,
+  userId?: string | null,
+  token?: string | null
+): void {
+  mockPayments().push({
+    checkout_id: orderId,
+    listing_id: listingId,
+    user_id: userId ?? null,
+    payer_email: normalizeEmail(payerEmail) || ANON_PAYER,
+    amount,
+    created_at: new Date().toISOString(),
+    token: token ?? null,
+  });
+}
+
+export function normalizeEmail(email?: string | null): string {
+  return (email ?? "").trim().toLowerCase();
 }
 
 function rankOf(target: Listing, all: Listing[]): number {

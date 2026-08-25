@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import type { Listing } from "@/lib/types";
 import { useLang } from "@/lib/lang-context";
 import { platformLabel } from "@/lib/platforms";
 import { timeAgo, formatUsd } from "@/lib/format";
 import { Avatar } from "@/components/avatar";
 import { PlatformBadge } from "@/components/platform-icon";
+import { SupportersPanel } from "@/components/supporters-panel";
 
 export function ListingRow({
   listing,
@@ -21,6 +23,7 @@ export function ListingRow({
   separatorAfter?: { label: string; afterRank: number } | null;
 }) {
   const { t, lang } = useLang();
+  const [open, setOpen] = useState(false); // supporters drawer (D9)
   // Any bid above the current holder takes the rank → claim price = bid + $1.
   const claimPrice = listing.bid_amount + 1;
   const claim = () =>
@@ -43,7 +46,7 @@ export function ListingRow({
           href={`/go/${listing.id}`}
           target="_blank"
           rel="sponsored noopener noreferrer"
-          className="flex h-full items-center gap-2 py-2 transition-colors hover:text-primary md:gap-3 md:py-3"
+          className="flex h-full items-center gap-2 py-2 pe-11 transition-colors hover:text-primary md:gap-3 md:py-3 md:pe-12"
         >
           <div className="flex w-10 shrink-0 flex-col items-center gap-1.5 md:w-auto md:flex-row md:gap-3">
             {isTop3 ? (
@@ -136,7 +139,44 @@ export function ListingRow({
         >
           {t.claimRankFor} {formatUsd(claimPrice)}
         </button>
+        {/* Supporters drawer toggle (D9): ranked payers per card. Lives outside
+            the visit <a> so expanding never counts as a click-through. */}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={t.supporters}
+          title={t.supporters}
+          className="absolute inset-y-0 end-1 z-10 my-auto inline-flex size-9 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="size-4 transition-transform motion-reduce:transition-none"
+            style={{ transform: open ? "rotate(180deg)" : undefined }}
+            aria-hidden="true"
+          >
+            <path
+              d="m6 9 6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </div>
+      {open && (
+        <div
+          className={
+            isTop3
+              ? "mx-1.5 my-1.5 rounded-xl border-2 border-t-0 border-primary/40 bg-primary/8 md:mx-3 md:my-3 md:rounded-2xl md:border-t-2"
+              : "mx-0 md:mx-1"
+          }
+        >
+          <SupportersPanel listingId={listing.id} />
+        </div>
+      )}
       {separatorAfter && separatorAfter.afterRank === rank && (
         <div role="separator" className="flex items-center gap-3 px-3 py-5 md:gap-4 md:px-4 md:py-7">
           <span className="h-0.5 flex-1 rounded-full bg-primary/30" />

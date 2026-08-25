@@ -3,8 +3,28 @@
 
 import { applyPaidListing, getListingByUrl } from "@/lib/store";
 import { isPlatform } from "@/lib/platforms";
+import { normalizeEmail } from "@/lib/store";
 
 export type CheckoutMetadata = Record<string, string>;
+
+export type PaymentAttribution = {
+  /** Verified payer email from the Dodo payment payload. */
+  payerEmail?: string | null;
+  /** Session user id set at checkout creation when the payer was logged in. */
+  userId?: string | null;
+};
+
+/** Extract the payer email from a payment.succeeded payload (best effort). */
+export function payerEmailFromPayload(data: Record<string, unknown>): string | null {
+  const customer = data.customer as { email?: string | null } | null | undefined;
+  return normalizeEmail(customer?.email) || null;
+}
+
+/** Extract a valid uuid user id from checkout metadata (server-set, trusted). */
+export function userIdFromMetadata(metadata: CheckoutMetadata): string | null {
+  const raw = metadata.user_id ?? "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw) ? raw : null;
+}
 
 /**
  * Apply a paid checkout from its metadata (attached at checkout creation).
@@ -16,7 +36,8 @@ export type CheckoutMetadata = Record<string, string>;
  */
 export async function applyPaidCheckout(
   metadata: CheckoutMetadata,
-  orderId: string
+  orderId: string,
+  attribution: PaymentAttribution = {}
 ): Promise<{ ok: boolean; reason?: string }> {
   const identityUrl = metadata.identity_url;
   const amount = parseInt(String(metadata.amount ?? "0"), 10);
@@ -41,6 +62,9 @@ export async function applyPaidCheckout(
     targetUrl: metadata.target_url || null,
     amount: effectiveAmount,
     orderId,
+    payerEmail: attribution.payerEmail ?? (normalizeEmail(metadata.email) || null),
+    userId: attribution.userId ?? null,
+    token: metadata.checkout_token || null, // pay_* cookie binding (32-hex)
   });
 
   if (!result.ok) console.error("payment apply failed", orderId, result.reason);

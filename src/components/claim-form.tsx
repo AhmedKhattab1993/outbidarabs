@@ -6,6 +6,7 @@ import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { identityErrorMessages, normalizeIdentity } from "@/lib/identity";
 import { HANDLE_CANDIDATES, detectPlatform, platformLabel, type Platform } from "@/lib/platforms";
 import { trackEvent } from "@/lib/analytics";
+import { ensurePayerHint } from "@/components/email-code-form";
 import { PlatformIcon, PlatformBadge } from "@/components/platform-icon";
 import { PlatformSelect } from "@/components/platform-select";
 import { Avatar } from "@/components/avatar";
@@ -181,6 +182,10 @@ export function ClaimForm({ topBid }: { topBid: number }) {
     }
     setLoading(true);
     trackEvent("checkout_started", { amount: value, raise: !!existing });
+    // Mock-payments payer key (browser-local): lets the post-payment prompt
+    // bind the just-made payment to the email the user then confirms. Real
+    // Dodo payments attribute from the verified webhook payload instead.
+    const payerHint = ensurePayerHint();
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -189,12 +194,22 @@ export function ClaimForm({ topBid }: { topBid: number }) {
           identity,
           platform: effectivePlatform,
           amount: value,
+          payerHint,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? identityErrorMessages("invalid", lang));
         return;
+      }
+      // The success page polls this id to offer the signup prompt once the
+      // webhook applies the payment (mock mode skips polling).
+      if (data.checkoutId) {
+        try {
+          sessionStorage.setItem("outbidarabs:checkout", String(data.checkoutId));
+        } catch {
+          /* private mode — prompt simply won't show */
+        }
       }
       window.location.href = data.url;
     } catch {

@@ -221,7 +221,11 @@ bash scripts/smoke.sh https://<preview>.vercel.app # layer 4
 bash scripts/smoke.sh https://outbidarabs.lol     # layer 5, after every prod deploy
 ```
 
-It checks (38 checks, exit 0 = pass):
+It checks (39 base checks + 14 mock-layer account/privacy checks, exit 0 =
+pass; the account section self-skips on real-mode deployments — a configured
+payment provider skips it before any auth call fires, so hosted Supabase
+auth quota is never consumed by a probe; layers 2–5 need a real inbox for
+auth):
 
 1. Board renders: platform headline + filter pills + earnings card, listings
    carry `platform`
@@ -233,7 +237,16 @@ It checks (38 checks, exit 0 = pass):
 5. Identity: `about.me` allowed, `t.me` rejected, illegal-content hosts/path
    rejected (incl. Arabic paths), two Play Store `id`s → two listings
 6. `/go/[id]` redirects with `?utm_source=outbidarabs`
-7. `/rules`, `/about` return 200 + raise-by-difference + origin-note copy
+7. `/rules`, `/about` return 200 + raise-by-difference + origin-note copy;
+   an unknown `/u/<id>` 404s
+8. Accounts & privacy (mock layer; a configured payment provider skips it
+   before any auth call fires — no OTP quota consumed): send-code validation
+   + devCode, wrong-code rejection, verify → session cookie →
+   `/api/auth/me`, claims without session → 401, card-state JSON free of
+   emails/payer fields/auth uuids, attributed supporter rows keyed by the
+   opaque `u:<public_id>` (never `u:<auth uuid>`), `/u/` by public id (200)
+   vs auth id (404), and payment-status payer-email reveal with vs without
+   the checkout cookie
 
 **Serverless caveat:** mock mode keeps state in the lambda's memory, so on
 Vercel each instance has its own board and stateful checks (raise/lookup) can
@@ -295,6 +308,73 @@ npx vercel
 Add all env vars from `.env.example` in the project settings and point
 `NEXT_PUBLIC_SITE_URL` at the final domain. Optionally set
 `NEXT_PUBLIC_LAUNCH_DATE` (ISO) — it feeds the earnings card and About page.
+
+## Accounts & claims (docs/accounts-workflow.md)
+
+Optional email-code accounts built on Supabase Auth OTP — **never required to
+browse or pay**. Login is only prompted for claiming card ownership, managing
+a profile, and the optional post-payment signup prompt.
+
+- **Flow**: pay anonymously → the Dodo webhook records `payments.payer_email`
+  → the success page offers a non-blocking prompt ("code sent to you@x.com")
+  → verifying the 6-digit code creates the account, ensures the profile and
+  backfills every anonymous payment with that email to it (spec flow 1/2).
+  The payer email is only revealed to the browser that initiated the
+  checkout: checkout creation sets an httpOnly `pay_*` token cookie (recorded
+  in `checkout_tokens` by the webhook apply), and `/api/payment-status`
+  matches it by value — anyone else holding the payment id gets
+  `applied: true, payerEmail: null` (no prompt, no PII).
+- **Claims** (`claims`, one owner per card — `listing_id` is the PK): "This is
+  me / هذا حسابي" in the card drawer; honor-system (D1, badge says "claimed",
+  not "verified"); owner can edit card description/image, never the URL (D6).
+- **Supporters drawer** (chevron on each board row, D9): users ranked by total
+  paid to that card (ties: earliest first). Private users render as
+  "Anonymous / مجهول" with amounts visible (D8); the claimed owner is pinned
+  with a badge when they've paid. The visit action stays `/go/[id]`.
+- **Profile** `/profile`: name, public toggle (default public, D3), read-only
+  email, payments grouped per card with the user's supporters rank, claimed
+  cards with board rank. Public page `/u/[id]` — private users 404.
+- **Privacy**: `payments`, `profiles` and `claims` all have RLS with no
+  public policies and revoked anon grants — the app touches them only via
+  the service role. `profiles.id` and `claims.user_id` are auth uuids, so
+  neither table is anon-readable (the anon key is public); public reads go
+  through `supporters_view`, which resolves identities and never exposes
+  `payer_email`. Public surfaces address users by the opaque
+  `profiles.public_id` (`/u/[id]`, supporter rows, the view) — auth uuids
+  never appear publicly (supporter row keys are `u:<public_id>` for users,
+  server-side HMAC digests for anonymous groups), and old `/u/<auth-uuid>`
+  links simply 404.
+  Payments without a known payer email (the `anonymous@local` sentinel,
+  which can never be backfilled to a real email) render as one anonymous
+  supporter row per payment; other anonymous payments group per email
+  digest (app API: server-side HMAC keys).
+- **Known residuals** (accepted, tracked here so they survive the review
+  loop): `checkout_tokens` rows are never pruned (opaque random values,
+  service-role only — no exposure, just growth); `/api/payment-status`
+  will proxy-retrieve a Dodo checkout session for any poll id it is handed
+  (payer email stays cookie-gated — no PII leak, just Dodo API load); mock
+  smoke on multi-instance Vercel may hard-fail account checks instead of
+  reporting inconclusive (mock-on-Vercel is not a supported layer).
+- **Env**: auth reuses the Supabase URL/anon key via `@supabase/ssr` cookie
+  sessions; optional `ACCOUNTS_HASH_SECRET` (server-side HMAC secret for
+  anonymous-supporter grouping keys — set a random value in production).
+  OTP sends are rate-limited in real mode by the DB-backed `otp_rate_limit`
+  table (5/hour/email, 60s resend cooldown — shared across serverless
+  instances, consumed atomically by the `consume_otp_allowance` RPC with a
+  `refund_otp_allowance` give-back on hard send failures; the in-memory
+  limiter is mock-only) in addition to Supabase's
+  own limits; the email
+  template says "expires shortly" because real-mode expiry follows the
+  Supabase project's OTP setting (custom SMTP for codes is a pre-launch
+  TODO, D10).
+- **Mock mode**: the whole flow works keyless — in-memory users/sessions/
+  payments/claims mirror the Supabase path, seeded with two demo supporters.
+  The mock OTP code is returned by the API and shown in the UI (mock only).
+  The mock payments path accepts a browser `payerHint` so the typed email in
+  the post-payment prompt can retro-claim demo payments, mirroring Dodo's
+  email attribution. Real Dodo checkouts ignore client hints entirely — the
+  webhook takes the payer email from the verified payload, plus
+  `metadata.user_id` set server-side when the payer was logged in.
 
 ## Rules engine (highest bid wins — per the product spec)
 

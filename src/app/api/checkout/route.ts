@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "node:crypto";
 import { normalizeIdentity, identityErrorMessages } from "@/lib/identity";
 import { applyPaidListing, getListingByUrl, getTopListing, MOCK_MODE } from "@/lib/store";
+import { getSessionUser } from "@/lib/accounts";
 import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { fetchListingMeta } from "@/lib/fetch-meta";
 import { isPlatform } from "@/lib/platforms";
@@ -11,6 +13,26 @@ export const dynamic = "force-dynamic";
 
 const usd = (n: number) => "$" + n.toLocaleString("en-US");
 
+// payment-status cookie binding: an httpOnly token cookie bound to this
+// checkout. Only the browser that initiated the payment can later read the
+// payer email (anyone holding the checkout/payment id just gets applied).
+const PAY_COOKIE_MAX_AGE = 60 * 60; // 1 hour — covers webhook polling
+
+function setPayCookie(res: NextResponse, checkoutId: string, token: string): void {
+  // Cookie-name safety only — the VALUE is the secret and payment-status
+  // matches by value across pay_* cookies, so the name is not load-bearing.
+  const name = `pay_${checkoutId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60)}`;
+  res.cookies.set(name, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: PAY_COOKIE_MAX_AGE,
+  });
+}
+
+const newPayToken = () => randomBytes(16).toString("hex");
+
 // Layer-2 switch: real Supabase + mock payments. Explicit opt-in via
 // ALLOW_MOCK_PAYMENTS=true (local only — Vercel production never sets it).
 const MOCK_PAYMENTS = MOCK_MODE || process.env.ALLOW_MOCK_PAYMENTS === "true";
@@ -20,6 +42,7 @@ export async function POST(req: NextRequest) {
     identity?: string;
     amount?: number;
     platform?: string;
+    payerHint?: string; // mock payments only: browser payer key for demo attribution
   };
   try {
     body = await req.json();
@@ -51,7 +74,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const [existing, top] = await Promise.all([getListingByUrl(identity.url), getTopListing()]);
+  const [existing, top, auth] = await Promise.all([
+    getListingByUrl(identity.url),
+    getTopListing(),
+    getSessionUser(),
+  ]);
 
   if (existing && amount <= existing.bid_amount) {
     const msg =
@@ -77,6 +104,12 @@ export async function POST(req: NextRequest) {
 
   // ── Mock checkout: apply immediately and land on success ──
   if (MOCK_PAYMENTS) {
+    // Mock payer key: logged-in email → browser hint → anonymous. Real Dodo
+    // payments ignore the client hint entirely — the webhook takes the payer
+    // email from the verified Dodo payload.
+    const mockPayerEmail = auth?.email ?? (body.payerHint || null);
+    const orderId = `mock_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const token = newPayToken();
     const result = await applyPaidListing({
       url: identity.url,
       platform: identity.platform,
@@ -85,7 +118,10 @@ export async function POST(req: NextRequest) {
       imageUrl: image,
       targetUrl: identity.href,
       amount,
-      orderId: `mock_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+      orderId,
+      payerEmail: mockPayerEmail,
+      userId: auth?.id ?? null,
+      token,
     });
     if (!result.ok) {
       return NextResponse.json(
@@ -93,9 +129,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    return NextResponse.json({
+    const res = NextResponse.json({
       url: `/success?name=${encodeURIComponent(result.listing.display_name)}&amount=${amount}&rank=${result.rank}&mock=1`,
+      checkoutId: orderId,
     });
+    setPayCookie(res, orderId, token);
+    return res;
   }
 
   // ── Dodo Payments checkout ──
@@ -117,6 +156,15 @@ export async function POST(req: NextRequest) {
   };
   if (description) metadata.description = description.slice(0, 480);
   if (image) metadata.image_url = image.slice(0, 480);
+  // Cookie-binding token: the webhook apply records it (checkout_tokens) so
+  // /api/payment-status reveals the payer email only to this browser.
+  const payToken = newPayToken();
+  metadata.checkout_token = payToken;
+  // Logged-in payer: attribute the payment directly (email prefill too).
+  if (auth) {
+    metadata.user_id = auth.id;
+    metadata.email = auth.email;
+  }
 
   try {
     // Product is Pay-What-You-Want with a $1 minimum so the per-checkout
@@ -134,9 +182,13 @@ export async function POST(req: NextRequest) {
         },
       ],
       return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}`,
+      // Prefill the payer email for logged-in users (attribution backup).
+      customer: auth ? { email: auth.email } : undefined,
       metadata,
     });
-    return NextResponse.json({ url: session.checkout_url });
+    const res = NextResponse.json({ url: session.checkout_url, checkoutId: session.session_id });
+    setPayCookie(res, session.session_id, payToken);
+    return res;
   } catch (e) {
     console.error("dodo checkout error", e);
     return NextResponse.json({ error: "checkout_failed" }, { status: 500 });

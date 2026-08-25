@@ -219,6 +219,103 @@ check "/about 200" $([ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "
 RULES_HTML=$(curl -s --max-time 20 "$BASE/rules" || echo "")
 check "rules mention raise-by-difference" $(echo "$RULES_HTML" | grep -qE "بدفع الفرق فقط|paying only the difference" && echo 0 || echo 1)
 check "rules include origin note" $(echo "$RULES_HTML" | grep -qE "مستوحاة من outbid.lol|inspired by outbid.lol" && echo 0 || echo 1)
+check "unknown public profile 404" $([ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/00000000-0000-4000-8000-000000000000")" = "404" ] && echo 0 || echo 1)
+
+# ── 8. Accounts & privacy (mock layer only) ────────────────
+# Real-mode deployments skip this section: devCode exists only in keyless
+# mock mode, and the auth/email surfaces need a real inbox (layers 2–5).
+echo "8) Accounts & privacy"
+ACCT_EMAIL="smoke$TS@example.com"
+# Detection without OTP side effects: section 4 already classified the
+# deployment — a configured payment provider (PAYMENT_MODE=1) skips below
+# before any auth call fires, so hosted Supabase auth quota is never
+# consumed by a probe (no OTP send, no otp_rate_limit row). Layer-2 dev
+# (real Supabase auth + mock payments) self-skips on the devCode check
+# after one local OTP (Mailpit — harmless, local only).
+if [ "$PAYMENT_MODE" = "0" ]; then
+MOCK_DETECT=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
+  -d "{\"email\":\"$ACCT_EMAIL\"}" || echo "")
+if echo "$MOCK_DETECT" | grep -q '"devCode"'; then
+  R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
+    -d '{"email":"not-an-email"}')
+  check "send-code rejects invalid email" $(echo "$R" | grep -q '"invalid-email"' && echo 0 || echo 1)
+
+  SEND="$MOCK_DETECT"
+  check "send-code returns devCode (mock)" $(echo "$SEND" | grep -q '"devCode"' && echo 0 || echo 1)
+  DEV=$(echo "$SEND" | json "j.devCode")
+
+  R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
+    -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"000000\"}")
+  check "verify rejects wrong code" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
+
+  JAR=$(mktemp)
+  R=$(curl -s --max-time 20 -c "$JAR" -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
+    -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"$DEV\"}")
+  check "verify accepts devCode + sets session cookie" $(grep -q "ob_session" "$JAR" && echo "$R" | grep -q '"ok":true' && echo 0 || echo 1)
+
+  ME=$(curl -s --max-time 20 -b "$JAR" "$BASE/api/auth/me")
+  check "/api/auth/me returns the email" $(echo "$ME" | json "j.user.email" | grep -qx "$ACCT_EMAIL" && echo 0 || echo 1)
+  MY_ID=$(echo "$ME" | json "j.user.id")
+  MY_PUB=$(echo "$ME" | json "j.user.publicId")
+
+  R=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -X POST "$BASE/api/claims" \
+    -H 'content-type: application/json' -d '{"listingId":"seed-0"}')
+  check "claims without session -> 401" $([ "$R" = "401" ] && echo 0 || echo 1)
+
+  if [ -n "$ID" ] && [ "$ID" != "ERR" ]; then
+    CARDS=$(curl -s --max-time 20 "$BASE/api/cards/$ID")
+    check "card state has no email/payer fields" $(echo "$CARDS" | grep -qE '"(payer_email|payerEmail|email)"' && echo 1 || echo 0)
+    if [ -n "$MY_ID" ] && [ "$MY_ID" != "ERR" ] && [ ${#MY_ID} -gt 8 ]; then
+      check "card state has no auth uuid" $(echo "$CARDS" | grep -q "$MY_ID" && echo 1 || echo 0)
+    fi
+  else
+    echo "  ⚠ card state checks skipped (empty board)"
+  fi
+
+  # Attributed supporter keys must be opaque: a logged-in mock checkout
+  # stamps the session user's id onto the payment directly, so the card's
+  # supporter row exists — and must expose neither the raw auth id nor the
+  # old "u:<auth id>" key form (only the opaque u:<public_id> key).
+  R=$(curl -s --max-time 25 -b "$JAR" -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "{\"identity\":\"https://smokeown$TS.example\",\"amount\":2}")
+  if echo "$R" | grep -q 'mock=1'; then
+    BOARD2=$(curl -s --max-time 20 "$BASE/api/board" || echo "")
+    OWN_ID=$(echo "$BOARD2" | json "j.listings.find(l => l.url === 'https://smokeown$TS.example').id")
+    if [ -n "$OWN_ID" ] && [ "$OWN_ID" != "ERR" ] && [ -n "$MY_ID" ] && [ ${#MY_ID} -gt 8 ]; then
+      CARDS_OWN=$(curl -s --max-time 20 "$BASE/api/cards/$OWN_ID")
+      check "session user appears as attributed supporter" $(echo "$CARDS_OWN" | grep -q "$MY_PUB" && echo 0 || echo 1)
+      check "attributed supporter key is opaque (no auth uuid / u:<uuid>)" $(echo "$CARDS_OWN" | grep -q "$MY_ID" && echo 1 || echo 0)
+    else
+      bad "attributed-supporter checks need the paid card id + session id"
+    fi
+  else
+    bad "logged-in mock checkout should apply (mock=1)"
+  fi
+
+  check "/u/<public_id> 200" $([ -n "$MY_PUB" ] && [ "$MY_PUB" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_PUB")" = "200" ] && echo 0 || echo 1)
+  check "/u/<auth id> 404" $([ -n "$MY_ID" ] && [ "$MY_ID" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_ID")" = "404" ] && echo 0 || echo 1)
+
+  # Cookie-bound payment-status: mock checkout sets pay_<orderId>; the payer
+  # email is revealed only when the request carries that cookie.
+  PAY_JAR=$(mktemp)
+  R=$(curl -s --max-time 25 -c "$PAY_JAR" -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "{\"identity\":\"https://smokepay$TS.example\",\"amount\":3,\"payerHint\":\"smokepayer$TS@example.com\"}")
+  PAY_ID=$(echo "$R" | json "j.checkoutId")
+  if [ -n "$PAY_ID" ] && [ "$PAY_ID" != "ERR" ]; then
+    S1=$(curl -s --max-time 20 -b "$PAY_JAR" "$BASE/api/payment-status?checkout=$PAY_ID")
+    check "payment-status with cookie reveals payerEmail" $(echo "$S1" | json "j.payerEmail" | grep -qx "smokepayer$TS@example.com" && echo 0 || echo 1)
+    S2=$(curl -s --max-time 20 "$BASE/api/payment-status?checkout=$PAY_ID")
+    check "payment-status without cookie hides payerEmail" $(echo "$S2" | json "j.payerEmail === null" | grep -q "true" && echo 0 || echo 1)
+  else
+    bad "mock checkout should return checkoutId for payment-status checks"
+  fi
+  rm -f "$JAR" "$PAY_JAR"
+else
+  echo "  ⤼ skipped (real auth backend — no devCode; auth checks need a real inbox)"
+fi
+else
+  echo "  ⤼ skipped (payment provider configured — auth checks need a real inbox)"
+fi
 
 echo "──────────────────────────────────────────────────────────"
 if [ "$fail" -gt 0 ]; then

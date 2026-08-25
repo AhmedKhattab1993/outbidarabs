@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang-context";
+import { useAuth } from "@/lib/auth-context";
+import { UserAvatar } from "@/components/user-avatar";
 
 export function SiteHeader() {
   const { t, lang, toggleLang } = useLang();
+  const { user, loading, openLogin } = useAuth();
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -42,6 +45,31 @@ export function SiteHeader() {
           </span>
         </a>
         <div className="order-2 flex items-center gap-2 sm:order-3 sm:gap-3">
+          {/* Account: avatar → profile when signed in, log-in prompt otherwise.
+              Login is never required to browse or pay (D5). */}
+          {!loading &&
+            (user ? (
+              <Link
+                href="/profile"
+                aria-label={t.navProfile}
+                title={t.navProfile}
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-full transition-all hover:bg-muted hover:text-foreground dark:hover:bg-muted/50"
+              >
+                <UserAvatar
+                  userId={user.publicId ?? user.email}
+                  name={user.profile?.display_name || user.email}
+                  className="size-7 text-xs ring-1 ring-black/5 dark:ring-white/10"
+                />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openLogin()}
+                className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary px-4 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/80"
+              >
+                {t.login}
+              </button>
+            ))}
           <button
             type="button"
             onClick={toggleLang}

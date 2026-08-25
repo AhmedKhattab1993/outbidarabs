@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Webhook } from "standardwebhooks";
-import { applyPaidCheckout } from "@/lib/apply-payment";
+import { applyPaidCheckout, payerEmailFromPayload, userIdFromMetadata } from "@/lib/apply-payment";
 import { paymentsEnvTag } from "@/lib/payments-env";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +48,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true, ok: false, skipped: "env_mismatch" });
   }
 
-  const result = await applyPaidCheckout(metadata, String(orderId));
+  // Payer attribution: the verified Dodo payload wins; metadata.user_id
+  // (set server-side at checkout for logged-in payers) backs it up.
+  const payerEmail = payerEmailFromPayload(data);
+  const userId = userIdFromMetadata(metadata);
+
+  const result = await applyPaidCheckout(metadata, String(orderId), { payerEmail, userId });
   return NextResponse.json({ received: true, ok: result.ok });
 }

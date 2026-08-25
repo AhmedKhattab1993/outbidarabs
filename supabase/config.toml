@@ -243,6 +243,12 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# OTP sign-in email (accounts, docs/accounts-workflow.md): shows the 6-digit
+# {{ .Token }} so local dev matches the production flow (verifyOtp type=email).
+[auth.email.template.magic_link]
+subject = "رمز الدخول إلى outbidarabs · Your outbidarabs code"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

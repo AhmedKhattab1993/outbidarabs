@@ -225,3 +225,268 @@ grant execute on function add_stat(text, bigint) to service_role;
 grant execute on function register_click(uuid) to service_role;
 grant execute on function count_online() to service_role;
 grant execute on function listing_rank(uuid) to service_role;
+
+-- ═══════════════════════════════════════════════════════════
+-- Accounts & claims (docs/accounts-workflow.md)
+-- ═══════════════════════════════════════════════════════════
+
+-- ── Profiles (1:1 with auth.users, created on first login) ──
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text not null default '',
+  avatar_url text,
+  is_public boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- ── Payments: one row per succeeded payment ──
+create table if not exists payments (
+  id bigint generated always as identity primary key,
+  checkout_id text unique not null,          -- Dodo payment id (idempotency key)
+  listing_id uuid not null references listings(id) on delete cascade,
+  user_id uuid references profiles(id),      -- null until the payer logs in (backfill)
+  payer_email text not null,                 -- from the Dodo payload or checkout session
+  amount integer not null check (amount > 0), -- what was actually charged
+  created_at timestamptz not null default now()
+);
+create index if not exists payments_listing_idx on payments (listing_id, amount desc);
+create index if not exists payments_user_idx on payments (user_id);
+create index if not exists payments_email_idx on payments (lower(payer_email));
+
+-- ── Claims: exactly one owner per card (listing_id is the PK) ──
+create table if not exists claims (
+  listing_id uuid primary key references listings(id) on delete cascade,
+  user_id uuid not null references profiles(id),
+  status text not null default 'active',
+  created_at timestamptz not null default now()
+);
+create index if not exists claims_user_idx on claims (user_id);
+
+-- ── Public supporters surface ──
+-- payments itself stays locked (RLS enabled, no policies, revoked grants):
+-- the public reads only this view, which resolves user identities and never
+-- exposes payer_email. Private profiles resolve to anonymous (null name).
+-- Grouping mirrors the app's rankSupporters: one row per (card, user) or
+-- (card, payer email) — coalesce on an email digest so anonymous payments
+-- from the same email collapse together. The digest is never selected: it
+-- exists only in the GROUP BY key, so no email-derived value is exposed.
+create or replace view supporters_view as
+select
+  p.listing_id,
+  max(p.user_id::text)::uuid as user_id,
+  case when coalesce(pr.is_public, false) then nullif(pr.display_name, '') end as display_name,
+  case when coalesce(pr.is_public, false) then pr.avatar_url end as avatar_url,
+  coalesce(pr.is_public, false) as is_public,
+  sum(p.amount)::bigint as total_paid,
+  min(p.created_at) as first_paid_at,
+  max(p.created_at) as last_paid_at
+from payments p
+left join profiles pr on pr.id = p.user_id
+group by
+  p.listing_id,
+  coalesce(p.user_id::text, 'e:' || md5(lower(p.payer_email))),
+  pr.display_name,
+  pr.avatar_url,
+  pr.is_public;
+
+-- ── RLS ──
+alter table profiles enable row level security;
+alter table payments enable row level security;
+alter table claims enable row level security;
+
+drop policy if exists "profiles public or self read" on profiles;
+create policy "profiles public or self read" on profiles
+  for select using (is_public or id = auth.uid());
+drop policy if exists "profiles self insert" on profiles;
+create policy "profiles self insert" on profiles
+  for insert with check (id = auth.uid());
+drop policy if exists "profiles self update" on profiles;
+create policy "profiles self update" on profiles
+  for update using (id = auth.uid());
+
+drop policy if exists "public read claims" on claims;
+create policy "public read claims" on claims for select using (true);
+-- payments: no anon/authenticated policies — service-role writes only
+-- (webhook + login backfill); public reads go through supporters_view.
+
+-- ── Privileges (after the blanket grants above, on purpose) ──
+revoke select on payments from anon, authenticated;
+grant select on supporters_view to anon, authenticated;
+
+-- ───────────────────────────────────────────────────────────
+-- Deferred hardening (mirrors migrations/20250824000002_deferred.sql)
+-- ───────────────────────────────────────────────────────────
+
+-- OTP rate limiting (real mode; the in-memory limiter stays mock-only)
+create table if not exists otp_rate_limit (
+  email text primary key,
+  sends integer not null default 0,
+  window_start timestamptz not null default now(),
+  last_sent_at timestamptz not null default now()
+);
+
+-- Checkout cookie tokens: payment-status reveals the payer email only to the
+-- browser holding the matching pay_* cookie VALUE for the stored token.
+create table if not exists checkout_tokens (
+  checkout_id text primary key,
+  token text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Opaque public ids (backfilled by the column default)
+alter table profiles add column if not exists public_id uuid not null default gen_random_uuid();
+create unique index if not exists profiles_public_id_idx on profiles (public_id);
+
+-- supporters_view (replaces the accounts-section definition above): one row
+-- per no-email payment (sentinel), email-digest rows otherwise, and public
+-- ids instead of auth uuids. Digests exist only in the GROUP BY key.
+-- (drop first: or-replace cannot rename the old user_id column.)
+drop view if exists supporters_view;
+create view supporters_view as
+select
+  p.listing_id,
+  pr.public_id as public_id,
+  case when coalesce(pr.is_public, false) then nullif(pr.display_name, '') end as display_name,
+  case when coalesce(pr.is_public, false) then pr.avatar_url end as avatar_url,
+  coalesce(pr.is_public, false) as is_public,
+  sum(p.amount)::bigint as total_paid,
+  min(p.created_at) as first_paid_at,
+  max(p.created_at) as last_paid_at
+from payments p
+left join profiles pr on pr.id = p.user_id
+group by
+  p.listing_id,
+  coalesce(
+    p.user_id::text,
+    case when lower(p.payer_email) = 'anonymous@local'
+      then 'c:' || md5(p.checkout_id)
+      else 'e:' || md5(lower(p.payer_email))
+    end
+  ),
+  pr.public_id,
+  pr.display_name,
+  pr.avatar_url,
+  pr.is_public;
+
+-- Recreating the view dropped the grant from the accounts section above —
+-- re-grant explicitly so anon readability survives the recreate.
+grant select on supporters_view to anon, authenticated;
+
+-- New tables land after the blanket grants above — lock them down (payments
+-- keeps its own revoke from the accounts section).
+alter table otp_rate_limit enable row level security;
+alter table checkout_tokens enable row level security;
+revoke all on otp_rate_limit from anon, authenticated;
+revoke all on checkout_tokens from anon, authenticated;
+
+-- ───────────────────────────────────────────────────────
+-- Lockdown (mirrors migrations/20250824000003_lockdown.sql)
+-- ───────────────────────────────────────────────────────
+
+-- profiles/claims → service-role only: both carry auth uuids and the anon
+-- key is public, so the "public read" policies exposed the uuid↔public_id
+-- mapping and every owner's auth id. The app reads these tables only via
+-- the service role (src/lib/accounts.ts); public surfaces use public_id.
+-- The self-insert/self-update policies go too (no authenticated-direct
+-- path exists). supporters_view keeps working (view-owner privileges).
+drop policy if exists "profiles public or self read" on profiles;
+drop policy if exists "profiles self insert" on profiles;
+drop policy if exists "profiles self update" on profiles;
+drop policy if exists "public read claims" on claims;
+revoke select on profiles from anon, authenticated;
+revoke select on claims from anon, authenticated;
+
+-- Atomic OTP window/cooldown/increment (replaces the app's racy
+-- read→check→upsert). Returns
+-- {"allowed":true,"sends":N} | {"allowed":false,"reason":…,"retry_after_sec":N}.
+create or replace function consume_otp_allowance(
+  p_email text,
+  p_max_sends integer,
+  p_window_sec integer,
+  p_cooldown_sec integer
+) returns json
+language plpgsql security definer as $$
+declare
+  v_now timestamptz := now();
+  v_window_cutoff timestamptz := v_now - make_interval(secs => p_window_sec);
+  v_cooldown_cutoff timestamptz := v_now - make_interval(secs => p_cooldown_sec);
+  v_sends integer;
+  v_window_start timestamptz;
+  v_last_sent_at timestamptz;
+  v_retry integer;
+begin
+  perform assert_service_role();
+
+  update otp_rate_limit
+  set
+    sends = case when window_start <= v_window_cutoff then 1 else sends + 1 end,
+    window_start = case when window_start <= v_window_cutoff then v_now else window_start end,
+    last_sent_at = v_now
+  where email = p_email
+    and (
+      window_start <= v_window_cutoff
+      or (sends < p_max_sends and last_sent_at <= v_cooldown_cutoff)
+    )
+  returning sends, window_start, last_sent_at into v_sends, v_window_start, v_last_sent_at;
+
+  if found then
+    return json_build_object('allowed', true, 'sends', v_sends);
+  end if;
+
+  select sends, window_start, last_sent_at
+    into v_sends, v_window_start, v_last_sent_at
+  from otp_rate_limit where email = p_email;
+
+  if not found then
+    insert into otp_rate_limit (email, sends, window_start, last_sent_at)
+    values (p_email, 1, v_now, v_now)
+    on conflict (email) do nothing
+    returning sends into v_sends;
+    if found then
+      return json_build_object('allowed', true, 'sends', 1);
+    end if;
+    update otp_rate_limit
+    set
+      sends = case when window_start <= v_window_cutoff then 1 else sends + 1 end,
+      window_start = case when window_start <= v_window_cutoff then v_now else window_start end,
+      last_sent_at = v_now
+    where email = p_email
+      and (
+        window_start <= v_window_cutoff
+        or (sends < p_max_sends and last_sent_at <= v_cooldown_cutoff)
+      )
+    returning sends into v_sends;
+    if found then
+      return json_build_object('allowed', true, 'sends', v_sends);
+    end if;
+    select sends, window_start, last_sent_at
+      into v_sends, v_window_start, v_last_sent_at
+    from otp_rate_limit where email = p_email;
+  end if;
+
+  if v_sends >= p_max_sends then
+    v_retry := ceil(extract(epoch from (v_window_start + make_interval(secs => p_window_sec) - v_now)))::int;
+    return json_build_object('allowed', false, 'reason', 'rate-limited', 'retry_after_sec', greatest(v_retry, 1));
+  end if;
+  v_retry := ceil(extract(epoch from (v_last_sent_at + make_interval(secs => p_cooldown_sec) - v_now)))::int;
+  return json_build_object('allowed', false, 'reason', 'cooldown', 'retry_after_sec', greatest(v_retry, 1));
+end;
+$$;
+
+-- Best-effort slot refund after a hard (non-rate-limit) send failure.
+create or replace function refund_otp_allowance(p_email text) returns void
+language plpgsql security definer as $$
+begin
+  perform assert_service_role();
+  update otp_rate_limit
+  set
+    sends = greatest(sends - 1, 0),
+    last_sent_at = case when sends <= 1 then now() - interval '1 hour' else last_sent_at end
+  where email = p_email;
+end;
+$$;
+
+revoke execute on function consume_otp_allowance(text, integer, integer, integer) from public;
+revoke execute on function refund_otp_allowance(text) from public;
+grant execute on function consume_otp_allowance(text, integer, integer, integer) to service_role;
+grant execute on function refund_otp_allowance(text) to service_role;

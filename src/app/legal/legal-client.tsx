@@ -13,6 +13,19 @@ function H2({ children }: { children: React.ReactNode }) {
 }
 
 /** Bilingual inline strings (same pattern as the success page). */
+
+// Visible support address (legal page promises a contact channel for
+// refunds/deletion — this is it).
+const CONTACT_EMAIL = "hello@outbidarabs.lol";
+
+function ContactLink() {
+  return (
+    <a className="text-primary hover:underline" href={`mailto:${CONTACT_EMAIL}`} dir="ltr">
+      {CONTACT_EMAIL}
+    </a>
+  );
+}
+
 export function LegalClient() {
   const { t, lang } = useLang();
   const ar = lang === "ar";
@@ -37,13 +50,14 @@ export function LegalClient() {
       </P>
       <H2>٣. سياسة الاسترداد</H2>
       <P>
-        • إذا لم يُطبَّق إدراجك بعد خصم المبلغ (خطأ تقني أو ازدواج)، يُسترد كامل المبلغ
-        تلقائياً.
+        • إذا لم يُطبَّق إدراجك بعد خصم المبلغ (خطأ تقني أو ازدواج)، يُسترد كامل المبلغ —
+        راسلنا على <ContactLink /> وسنعيده فوراً.
         <br />• المنفعة تُستهلك فور النشر: القائمة تظهر علنيةً في لحظة تأكيد الدفع، لذا لا
         يوجد استرداد بعد النشر بسبب تغيّر الرتبة أو تجاوز مزايدة أعلى — هذه طبيعة اللوحة
         العلنية المعلنة قبل الدفع.
         <br />• الإدراجات المخالفة للقواعد تُزال دون استرداد.
-        <br />• للحالات الاستثنائية راسلنا وسنراجع الطلب بشكل فردي.
+        <br />• للحالات الاستثنائية راسلنا على <ContactLink /> وسنراجع الطلب
+        بشكل فردي.
       </P>
       <H2>٤. مدة العرض</H2>
       <P>
@@ -55,7 +69,20 @@ export function LegalClient() {
         تُفحص كل الطلبات تلقائياً (محتوى غير قانوني/إباحي، روابط دردشة ودعوات، اختصارات
         روابط، معاملات تتبع) ويحق للإدارة إزالة أي إدراج مخالف.
       </P>
-      <H2>٦. التعديلات</H2>
+      <H2>٦. الحسابات والخصوصية</H2>
+      <P>
+        • الدخول بالبريد فقط: حسابك هو بريدك ورمز تحقق من ستة أرقام يُرسل إليه — لا
+        كلمات مرور ولا بيانات دخول أخرى.
+        <br />• نخزّن بريد الدافع (الوارد من مزوّد الدفع) لغرض واحد: ربط مدفوعاتك
+        بحسابك حتى تقدر تطالب بها لاحقاً وتظهر في قوائم الداعمين.
+        <br />• قوائم الداعمين تعرض الاسم المعروض والمبالغ المدفوعة؛ يمكنك إخفاء
+        نفسك من ملفك الشخصي فتظهر باسم «مجهول» مع بقاء المبلغ ظاهراً.
+        <br />• الملفات الشخصية العلنية تعرض البطاقات التي دعمتها والبطاقات
+        المطالب بها فقط.
+        <br />• للحذف: راسلنا على <ContactLink /> وسيُحذف حسابك وارتباط بريدك
+        بمدفوعاتك.
+      </P>
+      <H2>٧. التعديلات</H2>
       <P>نحتفظ بحق تحديث هذه الشروط، ويسري التحديث من نشره على هذه الصفحة.</P>
     </>
   ) : (
@@ -79,13 +106,15 @@ export function LegalClient() {
       <H2>3. Refund policy</H2>
       <P>
         • If your listing fails to apply after payment was captured (technical failure or
-        duplicate charge), the full amount is refunded automatically.
+        duplicate charge), the full amount is refunded — contact us at <ContactLink /> and
+        we will return it promptly.
         <br />• Fulfillment is instant and consumed on publication: the listing goes public
         the moment payment is confirmed. Because of that, rank changes or being outbid are
         not refundable — this is the publicly stated nature of the board, disclosed before
         payment.
         <br />• Listings that violate the rules are removed without refund.
-        <br />• Exceptional cases are reviewed individually — contact us.
+        <br />• Exceptional cases are reviewed individually — contact us at
+        {" "}<ContactLink />.
       </P>
       <H2>4. Display duration</H2>
       <P>
@@ -99,7 +128,22 @@ export function LegalClient() {
         links, URL shorteners, tracking parameters), and the operator may remove any
         violating listing.
       </P>
-      <H2>6. Changes</H2>
+      <H2>6. Accounts & privacy</H2>
+      <P>
+        • Email-code login only: your account is your email plus a 6-digit
+        verification code sent to it — no passwords or other credentials.
+        <br />• We store the payer email (as provided by the payment processor)
+        for one purpose: attributing your payments to your account so you can
+        claim them later and appear in supporters lists.
+        <br />• Supporters lists show display names and the amounts paid; you can
+        go private from your profile and appear as "Anonymous" — the amount
+        stays visible.
+        <br />• Public profiles show only the cards you supported and the cards
+        you claimed.
+        <br />• Deletion: contact us at {" "}<ContactLink /> and your account and
+        the link between your email and your payments will be removed.
+      </P>
+      <H2>7. Changes</H2>
       <P>
         We may update these terms; changes apply from publication on this page.
       </P>

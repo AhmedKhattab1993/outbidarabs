@@ -363,10 +363,16 @@ a profile, and the optional post-payment signup prompt.
   instances, consumed atomically by the `consume_otp_allowance` RPC with a
   `refund_otp_allowance` give-back on hard send failures; the in-memory
   limiter is mock-only) in addition to Supabase's
-  own limits; the email
-  template says "expires shortly" because real-mode expiry follows the
-  Supabase project's OTP setting (custom SMTP for codes is a pre-launch
-  TODO, D10).
+  own limits. **Auth email (staging + prod): custom SMTP via Resend**
+  (`smtp.resend.com:465`, user `resend`, password = `RESEND_API_KEY` in
+  `.env`), sender `noreply@outbidarabs.lol` (domain DKIM/SPF-verified in
+  Resend), magic-link template renders the 6-digit `{{ .Token }}` code,
+  OTP expiry 600s — configured through the Supabase Management API
+  (template editing requires custom SMTP; free-tier built-in email is
+  2/hour and link-based). Resend free tier: 100 emails/day. Inbound mail
+  (e.g. `hello@outbidarabs.lol`) is NOT hosted by Resend — needs a
+  forwarding/MX setup (ImprovMX etc.) before publishing that address
+  as a contact.
 - **Mock mode**: the whole flow works keyless — in-memory users/sessions/
   payments/claims mirror the Supabase path, seeded with two demo supporters.
   The mock OTP code is returned by the API and shown in the UI (mock only).

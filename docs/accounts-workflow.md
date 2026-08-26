@@ -1,36 +1,64 @@
 # Accounts — refined workflow spec
 
-Status: SHIPPED, with one superseding decision — **cards are agnostic:
-no ownership** (D1/D2/D6 below are superseded). Open decisions marked
-**[D#]** below, recommendations included.
+> **ADDENDUM (2026-08-24) — login required at the moment of payment.**
+> D5 below is **superseded**: paying now requires email-code login; browsing
+> and previewing stay anonymous. The gate is placed at the moment of
+> commitment and delivered with minimum friction: the claim form swaps
+> **inline** to email → 6-digit code (no modal hop, no navigation), the
+> pending payment is parked verbatim and **auto-resumes** on verify (no extra
+> click), Dodo gets the verified email prefilled (card details only), and the
+> 30-day session means returning payers see zero added steps.
+> `/api/checkout` enforces the session server-side (`401 login_required`
+> before any validation or provider work) — the gate is not UI-only.
+>
+> **Decisions made with this change:**
+> - The post-payment signup prompt, `pay_*` cookie binding, and the
+>   `payment-status` email reveal were **deleted** as obsolete (attribution
+>   now happens at checkout via the session). `/api/payment-status` is a bare
+>   `{ applied, attributed }` poll. `checkout_tokens` stays in the schema as
+>   an unused vestige (append-only migration history; nothing reads/writes
+>   it).
+> - `backfillPayments` stays as a safety net: legacy anonymous payments
+>   (pre-gate staging rows) and a session that expires between checkout and
+>   webhook still attribute on the next login with the same email.
+> - `payments.payer_email` keeps being recorded (webhook customer email /
+>   metadata email) as attribution fallback — with the gate it is always a
+>   verified address.
+> - The header "Log in" button stays (pre-login for eager users).
+
+Status: SHIPPED, with superseding decisions — **cards are agnostic:
+no ownership** (D1/D2/D6 below are superseded) and **login is required at the
+moment of payment** (D5 superseded, see addendum above). Open decisions
+marked **[D#]** below, recommendations included.
 Terminology: "card" (user-facing) = `listings` row (code). "Supporter" = anyone
 who paid toward a card. ("Owner" = removed concept: a card belongs to no one.)
 
 ## Core principle
 
-**Never block payment behind login.** Accounts are optional and created
-*after* value is delivered. Dodo already collects the payer's email at
-checkout — that email is the attribution key, so the account is ~free for the
-user: one 6-digit code after payment, or later, attaches all past payments.
+**Login at the moment of commitment, nothing before it.** Browsing and
+previewing are fully anonymous; the only gate is the pay button, which swaps
+the form inline to email → 6-digit code, parks the payment verbatim and
+auto-resumes it on verify (see the addendum above). Accounts exist to put a
+name on your support and manage your profile — never to browse.
 
 ## Flows
 
-### 1. Anonymous supporter pays (the default path — zero login friction)
-1. Land on board → type handle → preview card → amount → Dodo checkout
-   (Dodo requires the payer's email here anyway).
-2. Webhook (`payment.succeeded`) applies the payment as today **and** records
-   `payments.payer_email` from the Dodo payload (currently discarded).
-3. Success page shows payment result + a non-blocking prompt:
-   "Want your name on the supporters list? We sent a code to **you@x.com**"
-   → single input, enter 6-digit code → account exists, profile pre-filled,
-   every payment with that email auto-attributed.
-4. If they skip: they show as **Anonymous** on the card's supporters list
-   (amount still visible). They can claim later — same email → same payments.
+### 1. Supporter pays (the default path — login at the moment of commitment)
+1. Land on board → type handle → preview card → amount → **press pay**.
+2. Logged out? The form swaps inline to the email step → 6-digit code →
+   verify. The parked payment (identity, amount, platform) auto-resumes —
+   no extra click — and Dodo asks only for the card (email prefilled).
+3. Webhook (`payment.succeeded`) applies the payment **already attributed**
+   (`metadata.user_id` + verified email). The success page confirms and
+   returns to the board; there is nothing left to opt into.
+
+(Pre-gate flow — anonymous pay + post-payment prompt — removed; see the
+addendum.)
 
 ### 2. Logged-in user pays
-- `customer_email` is passed to the Dodo checkout session; webhook attributes
-  directly. No post-payment step needed.
-- Login is only ever *prompted*, never *required*, for supporting.
+- Press pay → straight to Dodo (card only). No gate, no prompt.
+- `metadata.user_id` + prefilled customer email attribute the payment at the
+  webhook. No post-payment step needed.
 
 ### 3. Owner claims a card — **REMOVED (agnostic cards)**
 Superseded: there is no ownership notion. Anyone can pay toward any card;
@@ -106,7 +134,7 @@ create table payments (
 | D2 | One owner per card vs multiple claimants | ~~Exactly one owner~~ **SUPERSEDED: no owners — anyone pays, anyone boosts** |
 | D3 | New users public or private by default | **Public** — recognition is the growth engine; prominent toggle; amounts always visible either way |
 | D4 | Avatar: generated-only vs upload (moderation + storage) | Generated initials/gradient first (zero moderation); upload as fast-follow |
-| D5 | Gate: is login ever required? | Only to manage a profile. Supporting stays anonymous forever (ownership gate removed) |
+| D5 | Gate: is login ever required? | ~~Only to manage a profile~~ **SUPERSEDED: login is required at the moment of payment** (inline gate + auto-resume; browsing stays anonymous — see addendum) |
 | D6 | Does claiming grant card edit rights? | ~~Yes for description/image~~ **SUPERSEDED: no edits — metadata is source-fetched and immutable after creation** |
 | D7 | Profile shows refunds/failed? | Succeeded only (matches webhook path) |
 | D8 | Private user on a supporters list | "Anonymous" + amount; nobody can unmask |

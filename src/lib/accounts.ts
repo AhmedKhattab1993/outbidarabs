@@ -1,7 +1,8 @@
 // Accounts data layer (docs/accounts-workflow.md).
 // Mirrors store.ts's dual-store pattern: Supabase (Auth + tables) when
 // configured, a fully in-memory mock store when keyless. Login is email-code
-// only (Supabase Auth OTP in real mode); browsing and paying never require it.
+// only (Supabase Auth OTP in real mode); browsing never requires it — paying
+// does (enforced server-side at /api/checkout).
 // Cards are agnostic — no ownership: anyone pays, anyone boosts.
 
 import { createHmac } from "node:crypto";
@@ -156,28 +157,6 @@ function mockUserById(id: string): MockUser | null {
 function mockUserByPublicId(publicId: string): MockUser | null {
   for (const u of mockUsers().values()) if (u.public_id === publicId) return u;
   return null;
-}
-
-/** Mock-payment layers (mock mode + Layer 2): retag the browser's anonymous
- *  payments with a real email the user just typed (mirrors Dodo telling us
- *  the payer's email). Mock mode mutates the in-memory twin; Layer 2 (real
- *  Supabase + mock payments) writes the same retag to the real tables. */
-export async function mockTagPayerEmail(from: string, to: string): Promise<void> {
-  const src = normalizePayerEmail(from);
-  const dst = normalizePayerEmail(to);
-  if (!src || !dst || src === dst) return;
-  if (MOCK_MODE) {
-    for (const p of mockPayments()) {
-      if (p.payer_email === src && !p.user_id) p.payer_email = dst;
-    }
-    return;
-  }
-  const { error } = await supabaseAdmin()
-    .from("payments")
-    .update({ payer_email: dst })
-    .eq("payer_email", src)
-    .is("user_id", null);
-  if (error) console.error("payer retag failed", src, error.message);
 }
 
 // ───────────────────────────────────────────────────────────

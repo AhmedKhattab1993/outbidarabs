@@ -64,7 +64,6 @@ export async function applyPaidCheckout(
     orderId,
     payerEmail: attribution.payerEmail ?? (normalizeEmail(metadata.email) || null),
     userId: attribution.userId ?? null,
-    token: metadata.checkout_token || null, // pay_* cookie binding (32-hex)
   });
 
   if (!result.ok) console.error("payment apply failed", orderId, result.reason);

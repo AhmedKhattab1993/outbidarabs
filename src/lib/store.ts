@@ -41,7 +41,6 @@ export type MockPayment = {
   payer_email: string;
   amount: number;
   created_at: string;
-  token: string | null; // pay_* cookie token (mock twin of checkout_tokens)
 };
 
 const MINUTE = 60_000;
@@ -153,7 +152,6 @@ export function mockPayments(): MockPayment[] {
       payer_email: s[1],
       amount: s[3],
       created_at: new Date(Date.now() - s[4] * 60_000).toISOString(),
-      token: null,
     }));
   }
   return globalStore.__mockPayments;
@@ -436,9 +434,8 @@ export async function applyPaidListing(params: {
   orderId: string;
   payerEmail?: string | null; // records the payment row (supporters list)
   userId?: string | null; // set when the payer was logged in at checkout
-  token?: string | null; // pay_* cookie token → checkout_tokens (cookie binding)
 }): Promise<ApplyResult> {
-  const { url, platform, displayName, description, imageUrl, targetUrl, amount, orderId, payerEmail, userId, token } = params;
+  const { url, platform, displayName, description, imageUrl, targetUrl, amount, orderId, payerEmail, userId } = params;
   if (amount > MAX_BID) return { ok: false, reason: "over-max" };
   if (amount < MIN_BID) return { ok: false, reason: "too-low" };
 
@@ -458,7 +455,7 @@ export async function applyPaidListing(params: {
       if (imageUrl) existing.image_url = imageUrl;
       globalStore.__mockRevenue = mockRevenue() + delta;
       pushMockActivity(existing, list, nowIso);
-      recordMockPayment(orderId, existing.id, delta, payerEmail, userId, token);
+      recordMockPayment(orderId, existing.id, delta, payerEmail, userId);
       return { ok: true, listing: existing, isNew: false, paidDelta: delta, rank: rankOf(existing, list) };
     }
     const listing: MockListing = {
@@ -478,7 +475,7 @@ export async function applyPaidListing(params: {
     list.push(listing);
     globalStore.__mockRevenue = mockRevenue() + amount;
     pushMockActivity(listing, list, nowIso);
-    recordMockPayment(orderId, listing.id, amount, payerEmail, userId, token);
+    recordMockPayment(orderId, listing.id, amount, payerEmail, userId);
     return { ok: true, listing, isNew: true, paidDelta: amount, rank: rankOf(listing, list) };
   }
 
@@ -528,7 +525,7 @@ export async function applyPaidListing(params: {
       rank,
     });
     await addRevenue(db, delta);
-    await insertPaymentRow(db, orderId, updated.id, delta, payerEmail, userId, token);
+    await insertPaymentRow(db, orderId, updated.id, delta, payerEmail, userId);
     return { ok: true, listing: updated, isNew: false, paidDelta: delta, rank };
   }
 
@@ -555,7 +552,7 @@ export async function applyPaidListing(params: {
     rank,
   });
   await addRevenue(db, amount);
-  await insertPaymentRow(db, orderId, created.id, amount, payerEmail, userId, token);
+  await insertPaymentRow(db, orderId, created.id, amount, payerEmail, userId);
   return { ok: true, listing: created, isNew: true, paidDelta: amount, rank };
 }
 
@@ -567,8 +564,7 @@ async function insertPaymentRow(
   listingId: string,
   amount: number,
   payerEmail?: string | null,
-  userId?: string | null,
-  token?: string | null
+  userId?: string | null
 ): Promise<void> {
   const { error } = await db.from("payments").insert({
     checkout_id: orderId,
@@ -578,14 +574,6 @@ async function insertPaymentRow(
     amount,
   });
   if (error) console.error("payments insert failed", orderId, error.message);
-  // Cookie-binding token: keyed by the payment id, read back by
-  // /api/payment-status to reveal the payer email only to the paying browser.
-  if (token) {
-    const { error: tokErr } = await db
-      .from("checkout_tokens")
-      .upsert({ checkout_id: orderId, token }, { onConflict: "checkout_id", ignoreDuplicates: true });
-    if (tokErr) console.error("checkout token insert failed", orderId, tokErr.message);
-  }
 }
 
 /** Mock-store twin of insertPaymentRow. */
@@ -594,8 +582,7 @@ function recordMockPayment(
   listingId: string,
   amount: number,
   payerEmail?: string | null,
-  userId?: string | null,
-  token?: string | null
+  userId?: string | null
 ): void {
   mockPayments().push({
     checkout_id: orderId,
@@ -604,7 +591,6 @@ function recordMockPayment(
     payer_email: normalizeEmail(payerEmail) || ANON_PAYER,
     amount,
     created_at: new Date().toISOString(),
-    token: token ?? null,
   });
 }
 

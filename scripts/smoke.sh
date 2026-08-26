@@ -5,9 +5,9 @@
 #   bash scripts/smoke.sh https://<preview-url>.vercel.app
 #   bash scripts/smoke.sh https://outbidarabs.lol
 #
-# Reads the board, exercises the rules engine through the mock-safe endpoints,
-# and verifies the identity/preview/redirect layers. No Dodo calls (mock-mode
-# safe); payment-specific checks (Layer 3) are documented in README.md.
+# Reads the board, exercises the auth gate and rules engine, and verifies the
+# identity/preview/redirect layers. No Dodo calls (mock-mode safe);
+# payment-specific checks (Layer 3) are documented in README.md.
 #
 # Exit code 0 = all checks passed.
 
@@ -115,90 +115,104 @@ check "tiktok post URL rejected (profile only)" $(echo "$P" | json "j.status" | 
 P=$(curl -s --max-time 25 "$BASE/api/preview?identity=https://vm.tiktok.com/ZMabcdef/" || echo "")
 check "vm.tiktok short link rejected" $(echo "$P" | json "j.status" | grep -q "error" && echo 0 || echo 1)
 
-# ── 4. Rules engine ────────────────────────────────────────
-echo "4) Rules engine (top bid: $TOPBID)"
+# ── 4. Auth gate + rules engine ────────────────────────────
+echo "4) Auth gate & rules engine (top bid: $TOPBID)"
 TS=$(( $(date +%s) % 100000 ))
+ACCT_EMAIL="smoke$TS@example.com"
 
-# Payment mode: a real provider configured → checkouts return provider URLs and
-# no state is written until a webhook fires. Stateful engine checks are skipped.
-PAYMENT_MODE=0
-is_provider_url() { echo "$1" | grep -q 'dodopayments'; }
-
-# 4a. new listing at top+1 → ACCEPTED and takes #1 (highest bid = highest rank)
+# 4a. The pay gate is server-enforced: no session → 401 BEFORE any work.
 R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-  -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1))}")
-if echo "$R" | grep -q 'dodopayments'; then
-  PAYMENT_MODE=1
-  echo "  ⚠ payment mode (real provider) — stateful checks need webhooks, skipping"
-elif echo "$R" | grep -q '"url"'; then
-  RANK=$(echo "$R" | json "(j.url||'').match(/rank=(\\d+)/)?.[1] || ''")
-  if [ "$RANK" = "1" ]; then ok "bid top+1 accepted at rank #1"
-  else bad "bid top+1 should take #1, got rank ${RANK:-?}: $R"; fi
-else
-  bad "bid top+1 should be accepted, got: $R"
-fi
+  -d "{\"identity\":\"https://gate$TS.example\",\"amount\":$((TOPBID + 1))}")
+check "checkout without session → 401 login_required" $(echo "$R" | grep -q '"login_required"' && echo 0 || echo 1)
 
-# 4b. low bid accepted at its reachable rank (skip in payment mode)
-if [ "$PAYMENT_MODE" = "0" ]; then
-  R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-    -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":2}")
+# 4b. Auth surface on every layer. The probe email uses example.com —
+# hosted Supabase rejects that domain (no real email is delivered, the
+# otp allowance is refunded), while keyless mock mode returns a devCode
+# instead. One probe, no double send.
+R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
+  -d '{"email":"not-an-email"}')
+check "send-code rejects invalid email" $(echo "$R" | grep -q '"invalid-email"' && echo 0 || echo 1)
+MOCK_DETECT=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
+  -d "{\"email\":\"$ACCT_EMAIL\"}" || echo "")
+R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
+  -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"000000\"}")
+check "verify rejects wrong code" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
+
+MOCK_ON=0
+JAR=""
+if echo "$MOCK_DETECT" | grep -q '"devCode"'; then
+  MOCK_ON=1
+  DEV=$(echo "$MOCK_DETECT" | json "j.devCode")
+  JAR=$(mktemp)
+  R=$(curl -s --max-time 20 -c "$JAR" -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
+    -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"$DEV\"}")
+  check "verify accepts devCode + sets session cookie" $(grep -q "ob_session" "$JAR" && echo "$R" | grep -q '"ok":true' && echo 0 || echo 1)
+
+  # Authenticated checkout call — every stateful rules check reuses this jar.
+  ck() { curl -s --max-time 25 -b "$JAR" -X POST "$BASE/api/checkout" -H 'content-type: application/json' "$@"; }
+
+  # 4c. new listing at top+1 → ACCEPTED and takes #1 (highest bid = highest rank)
+  R=$(ck -d "{\"identity\":\"https://smoke$TS.example\",\"amount\":$((TOPBID + 1))}")
+  if echo "$R" | grep -q '"url"'; then
+    RANK=$(echo "$R" | json "(j.url||'').match(/rank=(\\d+)/)?.[1] || ''")
+    if [ "$RANK" = "1" ]; then ok "bid top+1 accepted at rank #1"
+    else bad "bid top+1 should take #1, got rank ${RANK:-?}: $R"; fi
+  else
+    bad "bid top+1 should be accepted, got: $R"
+  fi
+
+  # 4d. low bid accepted at its reachable rank
+  R=$(ck -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":2}")
   if echo "$R" | grep -q '"url"'; then
     ok "low bid (\$2) accepted"
   else
     bad "low bid should be accepted, got: $R"
   fi
 
-  # 4c. raise same listing → accepted; raise ≤ current → rejected
-  R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-    -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":7}")
+  # 4e. raise same listing → accepted; raise ≤ current → rejected
+  R=$(ck -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":7}")
   STATE_OK=0
   if echo "$R" | grep -q '"url"'; then ok "raise 2→7 accepted"; STATE_OK=1
   elif echo "$R" | grep -qE 'بسعر \$2 بالفعل|already at \$2'; then bad "raise 2→7 wrongly rejected: $R"
   else echo "  ⚠ raise check inconclusive (serverless instance isolation) — $R"; fi
 
   if [ "$STATE_OK" = "1" ]; then
-    R=$(curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-      -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":7}")
+    R=$(ck -d "{\"identity\":\"https://smokelow$TS.example\",\"amount\":7}")
     check "raise ≤ current rejected" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
   else
     echo "  ⚠ raise ≤ current skipped (state not confirmed)"
   fi
+else
+  echo "  ⤼ stateful rules checks skipped (real auth/provider — need an inbox; see README)"
 fi
 
-# ── 5. Identity layer ──────────────────────────────────────
+# ── 5. Identity layer (preview API — same detector, session-free) ──
 echo "5) Identity"
-post_checkout() { # $1 identity, $2 amount
-  curl -s --max-time 25 -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-    -d "$(printf '{"identity":"%s","amount":%s}' "$1" "$2")"
-}
-R=$(post_checkout "https://t.me/somegroup" 10)
-check "checkout rejects t.me" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
+prev() { curl -s -G --max-time 25 "$BASE/api/preview" --data-urlencode "identity=$1" || echo ""; }
+P=$(prev "https://t.me/somegroup")
+check "identity rejects t.me" $(echo "$P" | json "j.status" | grep -qx "error" && echo 0 || echo 1)
 
-# Illegal content (drugs / gambling) — rejected with the illegal-content reason.
+# Illegal content (drugs / gambling) — rejected with an error status.
 for IDENT in "https://buy-cocaine-online$TS.example.com" "https://play-casino-bonus$TS.example.com" "https://bet365.com" "https://mobile.bet365.com"; do
-  R=$(post_checkout "$IDENT" 10)
-  check "rejects illegal: $IDENT" $(echo "$R" | grep -q 'غير القانوني\|Illegal content' && echo 0 || echo 1)
+  P=$(prev "$IDENT")
+  check "rejects illegal: $IDENT" $(echo "$P" | json "j.status" | grep -qx "error" && echo 0 || echo 1)
 done
 # Arabic path, percent-encoded exactly like a real browser submission
-R=$(post_checkout "https://example.com/%D9%85%D8%B1%D8%A7%D9%87%D9%86%D8%A7%D8%AA" 10)
-check "rejects illegal (arabic path)" $(echo "$R" | grep -q 'غير القانوني\|Illegal content' && echo 0 || echo 1)
+P=$(prev "https://example.com/%D9%85%D8%B1%D8%A7%D9%87%D9%86%D8%A7%D8%AA")
+check "rejects illegal (arabic path)" $(echo "$P" | json "j.status" | grep -qx "error" && echo 0 || echo 1)
 # Controls that must still pass (gambling keyword FP guards)
-R=$(post_checkout "https://betterhelp$TS.example.com" 6)
-check "betterhelp-style host allowed" $(echo "$R" | grep -q '"url"\|dodopayments' && echo 0 || echo 1)
+P=$(prev "https://betterhelp$TS.example.com")
+check "betterhelp-style host allowed" $(echo "$P" | json "j.status" | grep -qx "ok" && echo 0 || echo 1)
 
-R=$(post_checkout "https://about.me/smoke$TS" 6)
-check "about.me allowed" $(echo "$R" | grep -q '"url"\|dodopayments' && echo 0 || echo 1)
+P=$(prev "https://about.me/smoke$TS")
+check "about.me allowed" $(echo "$P" | json "j.status" | grep -qx "ok" && echo 0 || echo 1)
 
-# Play Store apps keyed by `?id=`: two different ids must be two listings.
-P1=$(post_checkout "https://play.google.com/store/apps/details?id=com.smoke.one.$TS" 6)
-P2=$(post_checkout "https://play.google.com/store/apps/details?id=com.smoke.two.$TS" 6)
-if echo "$P2" | grep -q '"url"'; then
-  ok "two Play Store ids are separate listings"
-elif echo "$P2" | grep -qE 'بسعر \$6 بالفعل|already at \$6'; then
-  bad "two Play Store ids share one listing (id param not in key)"
-else
-  echo "  ⚠ Play Store check inconclusive (serverless instance isolation) — P2: $P2"
-fi
+# Play Store apps keyed by `?id=`: two different ids canonicalize apart.
+P1=$(prev "https://play.google.com/store/apps/details?id=com.smoke.one.$TS")
+P2=$(prev "https://play.google.com/store/apps/details?id=com.smoke.two.$TS")
+U1=$(echo "$P1" | json "j.url")
+U2=$(echo "$P2" | json "j.url")
+check "two Play Store ids are separate listings" $([ -n "$U1" ] && [ "$U1" != "ERR" ] && [ "$U1" != "$U2" ] && echo 0 || echo 1)
 
 # ── 6. Click redirect ──────────────────────────────────────
 echo "6) Click redirect"
@@ -223,36 +237,10 @@ check "unknown public profile 404" $([ "$(curl -s -o /dev/null -w "%{http_code}"
 
 # ── 8. Accounts & privacy (mock layer only) ────────────────
 # Real-mode deployments skip this section: devCode exists only in keyless
-# mock mode, and the auth/email surfaces need a real inbox (layers 2–5).
+# mock mode, and the authenticated checks need a real inbox (layers 2–5).
+# The session was established in section 4 (JAR) — reused here.
 echo "8) Accounts & privacy"
-ACCT_EMAIL="smoke$TS@example.com"
-# Detection without OTP side effects: section 4 already classified the
-# deployment — a configured payment provider (PAYMENT_MODE=1) skips below
-# before any auth call fires, so hosted Supabase auth quota is never
-# consumed by a probe (no OTP send, no otp_rate_limit row). Layer-2 dev
-# (real Supabase auth + mock payments) self-skips on the devCode check
-# after one local OTP (Mailpit — harmless, local only).
-if [ "$PAYMENT_MODE" = "0" ]; then
-MOCK_DETECT=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
-  -d "{\"email\":\"$ACCT_EMAIL\"}" || echo "")
-if echo "$MOCK_DETECT" | grep -q '"devCode"'; then
-  R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/send-code" -H 'content-type: application/json' \
-    -d '{"email":"not-an-email"}')
-  check "send-code rejects invalid email" $(echo "$R" | grep -q '"invalid-email"' && echo 0 || echo 1)
-
-  SEND="$MOCK_DETECT"
-  check "send-code returns devCode (mock)" $(echo "$SEND" | grep -q '"devCode"' && echo 0 || echo 1)
-  DEV=$(echo "$SEND" | json "j.devCode")
-
-  R=$(curl -s --max-time 20 -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
-    -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"000000\"}")
-  check "verify rejects wrong code" $(echo "$R" | grep -q '"error"' && echo 0 || echo 1)
-
-  JAR=$(mktemp)
-  R=$(curl -s --max-time 20 -c "$JAR" -X POST "$BASE/api/auth/verify" -H 'content-type: application/json' \
-    -d "{\"email\":\"$ACCT_EMAIL\",\"code\":\"$DEV\"}")
-  check "verify accepts devCode + sets session cookie" $(grep -q "ob_session" "$JAR" && echo "$R" | grep -q '"ok":true' && echo 0 || echo 1)
-
+if [ "$MOCK_ON" = "1" ]; then
   ME=$(curl -s --max-time 20 -b "$JAR" "$BASE/api/auth/me")
   check "/api/auth/me returns the email" $(echo "$ME" | json "j.user.email" | grep -qx "$ACCT_EMAIL" && echo 0 || echo 1)
   MY_ID=$(echo "$ME" | json "j.user.id")
@@ -289,29 +277,23 @@ if echo "$MOCK_DETECT" | grep -q '"devCode"'; then
     bad "logged-in mock checkout should apply (mock=1)"
   fi
 
-  check "/u/<public_id> 200" $([ -n "$MY_PUB" ] && [ "$MY_PUB" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_PUB")" = "200" ] && echo 0 || echo 1)
-  check "/u/<auth id> 404" $([ -n "$MY_ID" ] && [ "$MY_ID" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_ID")" = "404" ] && echo 0 || echo 1)
-
-  # Cookie-bound payment-status: mock checkout sets pay_<orderId>; the payer
-  # email is revealed only when the request carries that cookie.
-  PAY_JAR=$(mktemp)
-  R=$(curl -s --max-time 25 -c "$PAY_JAR" -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
-    -d "{\"identity\":\"https://smokepay$TS.example\",\"amount\":3,\"payerHint\":\"smokepayer$TS@example.com\"}")
+  # payment-status is a bare poll: applied + attributed, never any PII.
+  R=$(curl -s --max-time 25 -b "$JAR" -X POST "$BASE/api/checkout" -H 'content-type: application/json' \
+    -d "{\"identity\":\"https://smokepay$TS.example\",\"amount\":3}")
   PAY_ID=$(echo "$R" | json "j.checkoutId")
   if [ -n "$PAY_ID" ] && [ "$PAY_ID" != "ERR" ]; then
-    S1=$(curl -s --max-time 20 -b "$PAY_JAR" "$BASE/api/payment-status?checkout=$PAY_ID")
-    check "payment-status with cookie reveals payerEmail" $(echo "$S1" | json "j.payerEmail" | grep -qx "smokepayer$TS@example.com" && echo 0 || echo 1)
-    S2=$(curl -s --max-time 20 "$BASE/api/payment-status?checkout=$PAY_ID")
-    check "payment-status without cookie hides payerEmail" $(echo "$S2" | json "j.payerEmail === null" | grep -q "true" && echo 0 || echo 1)
+    S1=$(curl -s --max-time 20 "$BASE/api/payment-status?checkout=$PAY_ID")
+    check "payment-status: applied + attributed" $(echo "$S1" | json "j.applied === true && j.attributed === true" | grep -q "true" && echo 0 || echo 1)
+    check "payment-status carries no payerEmail/PII" $(echo "$S1" | grep -qE '"payerEmail"|"payer_email"|"email"' && echo 1 || echo 0)
   else
     bad "mock checkout should return checkoutId for payment-status checks"
   fi
-  rm -f "$JAR" "$PAY_JAR"
+
+  check "/u/<public_id> 200" $([ -n "$MY_PUB" ] && [ "$MY_PUB" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_PUB")" = "200" ] && echo 0 || echo 1)
+  check "/u/<auth id> 404" $([ -n "$MY_ID" ] && [ "$MY_ID" != "ERR" ] && [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$BASE/u/$MY_ID")" = "404" ] && echo 0 || echo 1)
+  rm -f "$JAR"
 else
   echo "  ⤼ skipped (real auth backend — no devCode; auth checks need a real inbox)"
-fi
-else
-  echo "  ⤼ skipped (payment provider configured — auth checks need a real inbox)"
 fi
 
 echo "──────────────────────────────────────────────────────────"

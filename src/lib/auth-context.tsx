@@ -12,8 +12,9 @@ import {
 import { useLang } from "@/lib/lang-context";
 import { EmailCodeForm } from "@/components/email-code-form";
 
-// Client auth state + the global login modal. Login is only ever *prompted*
-// (profile / post-payment attribution) — never required to browse or pay.
+// Client auth state + the global login modal. Browsing stays anonymous;
+// login is required only at the moment of payment (the claim form's inline
+// gate) and for the profile.
 
 export type AuthUser = {
   id: string;
@@ -27,13 +28,11 @@ export type AuthUser = {
   } | null;
 };
 
-type LoginIntent = { onDone?: (user: AuthUser) => void };
-
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
-  openLogin: (intent?: LoginIntent) => void;
+  openLogin: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -48,7 +47,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<LoginIntent | null>(null);
+  const [modal, setModal] = useState(false);
 
   const refresh = useCallback(async (): Promise<AuthUser | null> => {
     try {
@@ -72,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const openLogin = useCallback((intent?: LoginIntent) => {
-    setModal(intent ?? {});
+  const openLogin = useCallback(() => {
+    setModal(true);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -92,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {modal && <LoginModal onClose={() => setModal(null)} onLoggedIn={refresh} intent={modal} />}
+      {modal && <LoginModal onClose={() => setModal(false)} onLoggedIn={refresh} />}
     </AuthContext.Provider>
   );
 }
@@ -100,11 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 function LoginModal({
   onClose,
   onLoggedIn,
-  intent,
 }: {
   onClose: () => void;
   onLoggedIn: () => Promise<AuthUser | null>;
-  intent: LoginIntent;
 }) {
   const { t } = useLang();
 
@@ -143,8 +140,7 @@ function LoginModal({
         </div>
         <EmailCodeForm
           onDone={async () => {
-            const u = await onLoggedIn();
-            if (u) intent.onDone?.(u);
+            await onLoggedIn();
             onClose();
           }}
         />

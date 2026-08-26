@@ -3,8 +3,8 @@ import { getProfile, getSessionUser } from "@/lib/accounts";
 
 export const dynamic = "force-dynamic";
 
-// Current session → user + profile (null when signed out). Read by the client
-// auth context and the success-page prompt.
+// Current session → user + profile (null when signed out). Read by the
+// client auth context (and the claim-form pay gate's 401 recheck).
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ user: null });

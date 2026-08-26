@@ -318,6 +318,9 @@ create table if not exists otp_rate_limit (
 
 -- Checkout cookie tokens: payment-status reveals the payer email only to the
 -- browser holding the matching pay_* cookie VALUE for the stored token.
+-- UNUSED VESTIGE (login-gate change): nothing reads or writes this table.
+-- Kept only because migration history is append-only — safe to drop in a
+-- future migration.
 create table if not exists checkout_tokens (
   checkout_id text primary key,
   token text not null,

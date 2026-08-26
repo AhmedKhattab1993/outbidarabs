@@ -6,7 +6,8 @@ import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { identityErrorMessages, normalizeIdentity } from "@/lib/identity";
 import { HANDLE_CANDIDATES, detectPlatform, platformLabel, type Platform } from "@/lib/platforms";
 import { trackEvent } from "@/lib/analytics";
-import { ensurePayerHint } from "@/components/email-code-form";
+import { useAuth } from "@/lib/auth-context";
+import { EmailCodeForm } from "@/components/email-code-form";
 import { PlatformIcon, PlatformBadge } from "@/components/platform-icon";
 import { PlatformSelect } from "@/components/platform-select";
 import { Avatar } from "@/components/avatar";
@@ -27,6 +28,13 @@ type PreviewOk = {
   topBid: number;
 };
 
+/** Outcome of a /api/checkout submission attempt. */
+type SubmitOutcome = "redirected" | "gate" | "error";
+
+/** A pay attempt parked behind the login gate — re-submitted verbatim after
+ *  the email code verifies (no data re-entry, no extra click). */
+type PendingPayment = { identity: string; platform: Platform; amount: number };
+
 type PreviewState =
   | { kind: "ambiguous"; candidates: Platform[] }
   | { kind: "ok"; data: PreviewOk }
@@ -35,6 +43,7 @@ type PreviewState =
 
 export function ClaimForm({ topBid }: { topBid: number }) {
   const { t, lang } = useLang();
+  const { user, loading: authLoading, refresh } = useAuth();
   const [identity, setIdentity] = useState("");
   // Platform picked in the dropdown next to the input (used to resolve bare
   // handles). Full links override it via auto-detection below.
@@ -44,6 +53,14 @@ export function ClaimForm({ topBid }: { topBid: number }) {
   const [amount, setAmount] = useState(String(topBid > 0 ? topBid + 1 : MIN_BID));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Pay-time login gate: the pending payment is stashed verbatim when a
+  // logged-out visitor presses pay; verifying the email code auto-resumes it.
+  const [gate, setGate] = useState<PendingPayment | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const resumeLock = useRef(false);
+  // True while a 401-triggered /api/auth/me re-check is in flight: a stale
+  // client session must not auto-resume until the recheck settles.
+  const refreshingSession = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const touched = useRef(false);
   const fetchSeq = useRef(0);
@@ -157,6 +174,83 @@ export function ClaimForm({ topBid }: { topBid: number }) {
   const gtTitle = previewOk?.meta?.title ?? existing?.display_name ?? previewOk?.displayName ?? "";
   const gtDescription = previewOk?.meta?.description ?? null;
 
+  /** Submit a payment attempt to /api/checkout. Returns "redirected" when
+   *  heading to the checkout URL, "gate" when a 401 parked the payment
+   *  behind the inline login gate, "error" when it failed with the form
+   *  error shown. */
+  const submitCheckout = useCallback(
+    async (p: PendingPayment, raise: boolean): Promise<SubmitOutcome> => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ identity: p.identity, platform: p.platform, amount: p.amount }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.error === "login_required") {
+            // Park the payment. The client session may be stale (signed out
+            // in another tab, expired cookie) — revalidate it so the resume
+            // effect stays parked until the email step delivers a real
+            // login, instead of looping on the stale user.
+            setGate(p);
+            if (!refreshingSession.current) {
+              refreshingSession.current = true;
+              void refresh().finally(() => {
+                refreshingSession.current = false;
+              });
+            }
+            return "gate";
+          }
+          setError(data.error ?? identityErrorMessages("invalid", lang));
+          return "error";
+        }
+        // One funnel event per real checkout (never on the pre-login 401
+        // attempt) — fired before the navigation below.
+        void trackEvent("checkout_started", { amount: p.amount, raise });
+        // The success page polls this id until the webhook applies the payment
+        // (mock mode skips polling).
+        if (data.checkoutId) {
+          try {
+            sessionStorage.setItem("outbidarabs:checkout", String(data.checkoutId));
+          } catch {
+            /* private mode — polling simply won't know the id */
+          }
+        }
+        window.location.href = data.url;
+        return "redirected";
+      } catch {
+        setError(identityErrorMessages("invalid", lang));
+        return "error";
+      } finally {
+        setLoading(false);
+      }
+    },
+    [lang, refresh]
+  );
+
+  // Auto-resume: once the gated login succeeds (any path — the inline form
+  // or the header modal) the parked payment is re-submitted automatically.
+  // The lock keeps strict-mode double effects and repeat renders from firing
+  // it twice; the session recheck guard parks (never loops) while a 401-
+  // triggered /api/auth/me recheck is settling a stale client session; the
+  // server's own idempotency is the final backstop.
+  useEffect(() => {
+    if (!gate || !user || resumeLock.current || refreshingSession.current) return;
+    resumeLock.current = true;
+    setResuming(true);
+    void (async () => {
+      const outcome = await submitCheckout(gate, !!existing);
+      resumeLock.current = false;
+      setResuming(false);
+      // A redirect leaves the page. A re-401 keeps the gate parked (the
+      // recheck re-presents the email step). Any other failure returns to
+      // the form with the error shown — nothing is lost.
+      if (outcome === "error") setGate(null);
+    })();
+  }, [gate, user, existing, submitCheckout]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -180,43 +274,14 @@ export function ClaimForm({ topBid }: { topBid: number }) {
       );
       return;
     }
-    setLoading(true);
-    trackEvent("checkout_started", { amount: value, raise: !!existing });
-    // Mock-payments payer key (browser-local): lets the post-payment prompt
-    // bind the just-made payment to the email the user then confirms. Real
-    // Dodo payments attribute from the verified webhook payload instead.
-    const payerHint = ensurePayerHint();
-    try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          identity,
-          platform: effectivePlatform,
-          amount: value,
-          payerHint,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? identityErrorMessages("invalid", lang));
-        return;
-      }
-      // The success page polls this id to offer the signup prompt once the
-      // webhook applies the payment (mock mode skips polling).
-      if (data.checkoutId) {
-        try {
-          sessionStorage.setItem("outbidarabs:checkout", String(data.checkoutId));
-        } catch {
-          /* private mode — prompt simply won't show */
-        }
-      }
-      window.location.href = data.url;
-    } catch {
-      setError(identityErrorMessages("invalid", lang));
-    } finally {
-      setLoading(false);
+    // Pay-time gate: logged-out visitors swap to the inline email-code step
+    // (their payment parks and auto-resumes on verify). Server enforces the
+    // session too, so a stale client state can never pay anonymously.
+    if (!user && !authLoading) {
+      setGate({ identity, platform: effectivePlatform, amount: value });
+      return;
     }
+    await submitCheckout({ identity, platform: effectivePlatform, amount: value }, !!existing);
   };
 
   const ctaLabel = loading
@@ -229,6 +294,33 @@ export function ClaimForm({ topBid }: { topBid: number }) {
 
   return (
     <section id="claim" className="scroll-mt-6">
+      {gate ? (
+        /* ── Inline login gate: swap the form for the email-code step at the
+            moment of commitment. The parked payment auto-resumes on verify;
+            Back returns to the untouched form. ── */
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-3 rounded-2xl border bg-card p-4 shadow-sm md:p-5">
+          <h2 className="text-center text-sm font-bold tracking-[-0.02em] text-pretty">
+            {t.gateTitle}
+          </h2>
+          <p className="text-center text-xs leading-relaxed text-muted-foreground text-pretty">
+            {t.gateBody}
+          </p>
+          {resuming || loading ? (
+            <p className="py-2 text-center text-sm font-bold text-primary" role="status">
+              {t.gateResuming}
+            </p>
+          ) : (
+            <EmailCodeForm compact onDone={() => void refresh()} />
+          )}
+          <button
+            type="button"
+            onClick={() => setGate(null)}
+            className="mx-auto cursor-pointer text-xs font-semibold text-muted-foreground hover:underline"
+          >
+            {t.back}
+          </button>
+        </div>
+      ) : (
       <form className="flex flex-col gap-3" onSubmit={onSubmit}>
         {/* ── Input with platform dropdown ── */}
         <div className="relative flex h-12 items-stretch rounded-2xl border border-input bg-transparent transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
@@ -433,6 +525,7 @@ export function ClaimForm({ topBid }: { topBid: number }) {
           {t.alreadyOnList}
         </p>
       </form>
+      )}
     </section>
   );
 }

@@ -4,54 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { useLang } from "@/lib/lang-context";
 
 // Email-code login form (spec: 6-digit code, no password). Shared by the
-// header modal, the success-page prompt and the profile page.
-//
-// mockPayerHint: mock-payment layers only (mock mode + Layer 2) — retags
-// the browser's anonymous demo/mock payments to the typed email once the
-// code send succeeds, mirroring how Dodo tells us the real payer email.
-
-export const PAYER_HINT_KEY = "outbidarabs:payer";
-
-export function getPayerHint(): string | null {
-  try {
-    return localStorage.getItem(PAYER_HINT_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function ensurePayerHint(): string {
-  try {
-    let h = localStorage.getItem(PAYER_HINT_KEY);
-    if (!h) {
-      h = `payer-${crypto.randomUUID().slice(0, 8)}@mock.local`;
-      localStorage.setItem(PAYER_HINT_KEY, h);
-    }
-    return h;
-  } catch {
-    return "payer@mock.local";
-  }
-}
+// header modal, the claim-form pay gate and the profile page.
 
 const inputCls =
   "h-12 w-full rounded-2xl border border-input bg-transparent px-4 text-center text-base outline-none transition-colors focus:border-ring focus:ring-3 focus:ring-ring/50 dark:bg-input/30";
 
 export function EmailCodeForm({
-  initialEmail,
-  startAtCode = false,
-  mockPayerHint = null,
   compact = false,
   onDone,
 }: {
-  initialEmail?: string;
-  startAtCode?: boolean; // email already known (success-page prompt)
-  mockPayerHint?: string | null;
   compact?: boolean;
   onDone: (email: string) => void;
 }) {
   const { t } = useLang();
-  const [step, setStep] = useState<"email" | "code" | "done">(startAtCode ? "code" : "email");
-  const [email, setEmail] = useState(initialEmail ?? "");
+  const [step, setStep] = useState<"email" | "code" | "done">("email");
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [devCode, setDevCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,12 +46,6 @@ export function EmailCodeForm({
     }, 1000);
   };
 
-  // startAtCode means "this email came from the payment" — no code has been
-  // sent yet, so one is fired automatically on mount (exactly once; the ref
-  // survives React strict-mode's double effect). API cooldown/rate-limit
-  // responses are respected, never fought.
-  const autoSentRef = useRef(false);
-
   type SendOutcome =
     | { ok: true }
     | { ok: false; kind: "rate-limited" | "cooldown" | "invalid" | "network" };
@@ -96,7 +57,7 @@ export function EmailCodeForm({
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, mockPayerHint }),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -136,20 +97,6 @@ export function EmailCodeForm({
     }
   };
 
-  useEffect(() => {
-    if (!startAtCode || autoSentRef.current) return;
-    autoSentRef.current = true;
-    void (async () => {
-      const r = await sendCode(true);
-      if (r.ok || r.kind === "rate-limited" || r.kind === "cooldown") return;
-      // The auto-send failed hard (bad email / network) — fall back to the
-      // email step with the address pre-filled so the user can retry.
-      setStep("email");
-    })();
-    // Fires once per mount (ref-guarded); sendCode is captured on first render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const verify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -160,15 +107,23 @@ export function EmailCodeForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, code }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(t.invalidCode);
-        setCode("");
+        // Only a real rejection clears the typed code; anything else (5xx,
+        // unexpected shape) is retryable and keeps the input.
+        if (data && (data.error === "invalid-code" || data.error === "invalid-email")) {
+          setError(t.invalidCode);
+          setCode("");
+        } else {
+          setError(t.verifyFailed);
+        }
         return;
       }
       setStep("done");
       onDone(email);
     } catch {
-      setError(t.invalidCode);
+      // Network failure — the code may well be correct; keep it typed.
+      setError(t.verifyFailed);
     } finally {
       setBusy(false);
     }

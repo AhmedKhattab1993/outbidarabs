@@ -130,16 +130,14 @@ export const dict = {
     tooManyCodes: "رسائل كتيرة — جرّب بعد ساعة",
     cooldownSoon: (s: number) => `استنى ${s} ثانية قبل إعادة الإرسال`,
     sendCodeFailed: "تعذّر إرسال الرمز — جرّب تاني",
+    verifyFailed: "تعذّر التحقق من الرمز — جرّب تاني",
     mockCodeNote: (code: string) => `وضع التجربة — الرمز: ${code}`,
     loginSuccess: "أهلاً بك!",
     close: "إغلاق",
-    signupPromptTitle: "عايز اسمك يظهر في قائمة الداعمين؟",
-    signupPromptBody: (email: string) =>
-      `دفعك اتربط بـ ${email}. أكّد الرمز عشان يتربط بحسابك — أو كمّل كمجهول.`,
-    signupPromptMockTitle: "اربط دفعك بحسابك",
-    signupPromptMockBody: "اكتب بريدك وهنرسل رمز تأكيد — دفعك هيظهر باسمك في قائمة الداعمين.",
-    later: "لاحقاً",
-    linkedDone: "تم — دفعاتك المرتبطة ببريدك بقت في حسابك.",
+    // ── Pay-time login gate ──
+    gateTitle: "أكمل الدخول لإتمام الدفع",
+    gateBody: "الدفع يحتاج تسجيل دخول سريع بالبريد — رمز من 6 أرقام بدون كلمة سر، ومدفوعتك تكمل لوحدها بعد التأكيد.",
+    gateResuming: "جارٍ متابعة الدفع…",
     // ── Card drawer (supporters) ──
     supporters: "الداعمون",
     supportersCount: (n: number) => `${n.toLocaleString("en-US")} داعم`,
@@ -287,16 +285,15 @@ export const dict = {
     tooManyCodes: "Too many codes — try again in an hour",
     cooldownSoon: (s: number) => `Wait ${s}s before resending`,
     sendCodeFailed: "Couldn't send the code — try again",
+    verifyFailed: "Couldn't verify the code — try again",
     mockCodeNote: (code: string) => `Mock mode — code: ${code}`,
     loginSuccess: "You're in!",
     close: "Close",
-    signupPromptTitle: "Want your name on the supporters list?",
-    signupPromptBody: (email: string) =>
-      `Your payment is tied to ${email}. Confirm the code to link it to your account — or stay anonymous.`,
-    signupPromptMockTitle: "Link your payment to your account",
-    signupPromptMockBody: "Enter your email and we'll send a code — your payments will show under your name on supporters lists.",
-    later: "Later",
-    linkedDone: "Done — every payment made with your email is now in your account.",
+    // ── Pay-time login gate ──
+    gateTitle: "Log in to complete your payment",
+    gateBody:
+      "Paying takes a quick email login — a 6-digit code, no password. Your payment continues automatically once verified.",
+    gateResuming: "Resuming your payment…",
     // ── Card drawer (supporters) ──
     supporters: "Supporters",
     supportersCount: (n: number) => `${n.toLocaleString("en-US")} supporter${n === 1 ? "" : "s"}`,

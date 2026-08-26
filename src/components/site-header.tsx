@@ -46,7 +46,8 @@ export function SiteHeader() {
         </a>
         <div className="order-2 flex items-center gap-2 sm:order-3 sm:gap-3">
           {/* Account: avatar → profile when signed in, log-in prompt otherwise.
-              Login is never required to browse or pay (D5). */}
+              Browsing is anonymous; login is required only at the moment of
+              payment (the claim form gates inline). */}
           {!loading &&
             (user ? (
               <Link

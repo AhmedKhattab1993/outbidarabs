@@ -48,12 +48,3 @@ export async function trackEvent(name: string, props?: Record<string, string | n
   const df = await getAnalytics();
   if (df) df.track(name, props);
 }
-
-/** Track a completed payment (email-based revenue attribution). */
-export async function trackPayment(email: string | null, amount: number, currency = "USD") {
-  const df = await getAnalytics();
-  if (df) {
-    if (email) df.trackPayment({ email, amount, currency });
-    else df.track("payment", { amount, currency });
-  }
-}

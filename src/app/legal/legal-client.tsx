@@ -71,10 +71,11 @@ export function LegalClient() {
       </P>
       <H2>٦. الحسابات والخصوصية</H2>
       <P>
-        • الدخول بالبريد فقط: حسابك هو بريدك ورمز تحقق من ستة أرقام يُرسل إليه — لا
-        كلمات مرور ولا بيانات دخول أخرى.
-        <br />• نخزّن بريد الدافع (الوارد من مزوّد الدفع) لغرض واحد: ربط مدفوعاتك
-        بحسابك حتى تقدر تطالب بها لاحقاً وتظهر في قوائم الداعمين.
+        • لإتمام الدفع يلزم تسجيل دخول بالبريد: حسابك هو بريدك ورمز تحقق من ستة
+        أرقام يُرسل إليه — لا كلمات مرور ولا بيانات دخول أخرى. التصفح والمتابعة
+        متاحان بدون حساب.
+        <br />• نخزّن بريد الدافع لغرض واحد: ربط مدفوعاتك بحسابك حتى تظهر في
+        ملفك وفي قوائم الداعمين.
         <br />• قوائم الداعمين تعرض الاسم المعروض والمبالغ المدفوعة؛ يمكنك إخفاء
         نفسك من ملفك الشخصي فتظهر باسم «مجهول» مع بقاء المبلغ ظاهراً.
         <br />• الملفات الشخصية العلنية تعرض البطاقات التي دعمتها فقط.
@@ -129,11 +130,12 @@ export function LegalClient() {
       </P>
       <H2>6. Accounts & privacy</H2>
       <P>
-        • Email-code login only: your account is your email plus a 6-digit
-        verification code sent to it — no passwords or other credentials.
-        <br />• We store the payer email (as provided by the payment processor)
-        for one purpose: attributing your payments to your account so you can
-        claim them later and appear in supporters lists.
+        • Completing a payment requires an email-code login: your account is
+        your email plus a 6-digit verification code sent to it — no passwords
+        or other credentials. Browsing stays account-free.
+        <br />• We store the payer email for one purpose: attributing your
+        payments to your account so they appear in your profile and in
+        supporters lists.
         <br />• Supporters lists show display names and the amounts paid; you can
         go private from your profile and appear as "Anonymous" — the amount
         stays visible.

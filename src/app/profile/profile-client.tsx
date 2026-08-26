@@ -22,7 +22,7 @@ type MeData = {
 
 export function ProfileClient() {
   const { t } = useLang();
-  const { user, loading, refresh, openLogin, signOut } = useAuth();
+  const { user, loading, refresh, signOut } = useAuth();
   const [data, setData] = useState<MeData | null>(null);
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(true);

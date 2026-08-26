@@ -428,18 +428,23 @@ ownership — anyone can pay, anyone can boost.
 ## Smart fetching (preview card)
 
 When an input is detected, `/api/preview` fetches public data for the card
-(best effort — never blocks, 4.5s timeout, 10-minute server cache; the card is
-view-only and shows what the platform returned, falling back to the handle):
+(best effort — never blocks, whole lookup capped at ~9s by a shared budget,
+10-minute success cache + 15s negative cache, single-flight de-dup of
+concurrent identical lookups; the card is view-only and shows what the
+platform returned, falling back to the handle):
 
 | Platform | Source | Gets |
 |---|---|---|
 | Website | page OG tags | image, title, description (+ favicon fallback in UI) |
 | App (App Store) | iTunes Lookup API | icon, name, developer, description |
 | App (Play Store) | page OG tags | icon, name, description |
-| TikTok | tiktok.com oEmbed | nickname, avatar |
-| X | publish.twitter.com oEmbed | display name |
-| Instagram | web_profile_info + OG fallback (usually walled → clean fallback) | best effort |
+| TikTok | oEmbed + embedded `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON | nickname, 1080px avatar, bio |
+| X | profile-page OG tags → publish.x.com oEmbed | avatar, display name, bio (oEmbed: name only) |
+| Instagram | web_profile_info via curl (Node fetch is TLS-fingerprint-429'd) + OG fallback | best effort |
 | LinkedIn | page OG tags (usually login-walled) | best effort |
+
+Verify live after changes: `node --experimental-strip-types scripts/test-meta.mjs`
+(hit every platform once; exits non-zero if any platform returns nothing).
 
 Failed/generic fetches return `meta: null` → the card falls back to the platform
 icon + handle (view-only ground truth, exactly as the spec requires).

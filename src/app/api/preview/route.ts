@@ -5,6 +5,9 @@ import { fetchListingMeta } from "@/lib/fetch-meta";
 import { isPlatform } from "@/lib/platforms";
 
 export const dynamic = "force-dynamic";
+// Hard ceiling in fetch-meta is ~9s; declare 15s so serverless limits never
+// truncate a legitimately slow (worst-case) lookup.
+export const maxDuration = 15;
 
 // Preview: platform detection + smart fetch + existing-listing context for
 // the claim form. Never fails hard — a failed fetch returns meta: null and

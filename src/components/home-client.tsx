@@ -190,6 +190,10 @@ export function HomeClient({
                         key={listing.id}
                         listing={listing}
                         rank={rank}
+                        // Global bids mirror the full board (index = rank-1),
+                        // so the neighbor above stays correct even for the
+                        // first row of a page or a platform-filtered view.
+                        bidAbove={rank > 1 && rank - 2 < bids.length ? bids[rank - 2] : undefined}
                         isTop3={rank <= 3}
                         isTop10={rank <= 10}
                         separatorAfter={

@@ -53,6 +53,9 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   // Active board bids sorted desc — the source of every rank calculation here.
   const topBid = bids[0] ?? 0;
   const [amount, setAmount] = useState(String(topBid > 0 ? topBid + 1 : MIN_BID));
+  // `amount` is always what the visitor PAYS: the full bid for a new card,
+  // or just the raise delta for a card already on the board (the resulting
+  // total is derived below — the checkout API still receives the total).
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Pay-time login gate: the pending payment is stashed verbatim when a
@@ -79,12 +82,15 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   const effectivePlatform = autoPlatform ?? platformChoice;
 
   // Keep the suggested #1 price in sync when the board changes and the user
-  // hasn't touched the stepper yet (#1 = any bid above the current top).
+  // hasn't touched the stepper yet (#1 = any bid above the current top). A
+  // card already in preview keeps its own suggestion — the one-level-up
+  // delta from the previewOk effect below — since a raise's pay amount is
+  // not the #1 price.
   useEffect(() => {
-    if (!touched.current) {
+    if (!touched.current && !previewOk?.existing) {
       setAmount(String(topBid > 0 ? topBid + 1 : MIN_BID));
     }
-  }, [topBid]);
+  }, [topBid, previewOk]);
 
   // ── Detection + smart fetch (debounced) ──
   useEffect(() => {
@@ -140,28 +146,33 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   }, [identity, effectivePlatform]);
 
   // The card is ground truth from the platform (view-only), so the preview
-  // only drives the suggested bid: raise → beat your own bid; otherwise beat
-  // the top. The server independently re-derives the listing metadata.
+  // only drives the suggested bid. A card already on the board defaults to
+  // the delta that lifts it one level up (beating the smallest at-or-above
+  // bid — under ties that can jump several ranks); #1 defaults to +$1 on
+  // the lead. New cards default to beating the top. The server
+  // independently re-derives the listing metadata.
   useEffect(() => {
     if (!previewOk || touched.current) return;
     const existing = previewOk.existing;
-    const suggest = existing
-      ? Math.max(existing.bid_amount + 1, previewOk.topBid + 1)
-      : previewOk.topBid > 0
-        ? previewOk.topBid + 1
-        : MIN_BID;
-    setAmount(String(Math.min(MAX_BID, suggest)));
-  }, [previewOk]);
+    let suggest: number;
+    if (existing) {
+      const above = bids.filter((b) => b >= existing.bid_amount);
+      suggest = above.length > 1 ? above[above.length - 2] + 1 - existing.bid_amount : 1;
+    } else {
+      suggest = previewOk.topBid > 0 ? previewOk.topBid + 1 : MIN_BID;
+    }
+    setAmount(String(Math.min(MAX_BID, Math.max(1, suggest))));
+  }, [previewOk, bids]);
 
-  // "boost this card for $X" buttons on the board: prefill the exact card
+  // "boost it ↑ for $X" buttons on the board: prefill the exact card
   // (identity = its canonical URL, so platform auto-detects and the preview
-  // lands in the pay-the-difference state) plus the one-dollar-over price.
-  // The amount field keeps the focus — it's the one decision left.
+  // lands in the pay-the-difference state) plus the delta that lifts it one
+  // level up. The amount field keeps the focus — it's the one decision left.
   useEffect(() => {
     const onBoost = (e: Event) => {
-      const detail = (e as CustomEvent<{ amount: number; url?: string }>).detail;
+      const detail = (e as CustomEvent<{ pay: number; url?: string }>).detail;
       touched.current = true;
-      setAmount(String(detail.amount));
+      setAmount(String(Math.min(MAX_BID, Math.max(1, detail.pay))));
       if (detail.url) {
         setIdentity(detail.url);
         setError(null);
@@ -174,38 +185,54 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     return () => window.removeEventListener("outbidarabs:boost", onBoost);
   }, []);
 
-  const clamp = useCallback((n: number) => Math.min(MAX_BID, Math.max(MIN_BID, n)), []);
-
-  const value = parseInt(amount, 10) || 0;
+  const value = parseInt(amount, 10) || 0; // what the visitor pays
   const existing = previewOk?.existing ?? null;
-  const diff = existing && value > existing.bid_amount ? value - existing.bid_amount : 0;
+  // Resulting total bid after payment — what the board ranks and the
+  // checkout API receives (the server charges `value` for raises).
+  const total = existing ? existing.bid_amount + value : value;
 
-  // ── Live rank preview: what spot does `value` buy after payment? ──
+  // The pay amount stays within [MIN_BID, MAX_BID] — and, when raising an
+  // existing card, within what its total can legally reach.
+  const clamp = useCallback(
+    (n: number) => {
+      const cap = existing ? MAX_BID - existing.bid_amount : MAX_BID;
+      return Math.max(MIN_BID, Math.min(cap >= MIN_BID ? cap : MIN_BID, n));
+    },
+    [existing]
+  );
+
+  // ── Live rank preview: what spot does `total` buy after payment? ──
   // Ties lose to the earlier payer (board sorts by bid desc, last_bid_at
-  // asc), so count every bid >= value — not just those strictly above. An
+  // asc), so count every bid >= total — not just those strictly above. An
   // equal bid never dislodges the sitting holder.
-  const atOrAbove = value >= MIN_BID ? bids.filter((b) => b >= value) : [];
-  const projectedRank = value >= MIN_BID ? atOrAbove.length + 1 : 0;
-  // Cheapest bump that gains a rank: beat the smallest bid at-or-above value.
+  const atOrAbove = total >= MIN_BID ? bids.filter((b) => b >= total) : [];
+  const projectedRank = total >= MIN_BID ? atOrAbove.length + 1 : 0;
+  // Cheapest bump that gains a rank: beat the smallest bid at-or-above total.
   // Under ties that price can jump more than one rank (beating one 99 beats
   // every 99) — re-derive where it actually lands for the upsell label.
   const nextRankPrice = projectedRank > 1 ? atOrAbove[atOrAbove.length - 1] + 1 : 0;
   const nextRankUp =
-    nextRankPrice > value ? 1 + bids.filter((b) => b >= nextRankPrice).length : 0;
+    nextRankPrice > total ? 1 + bids.filter((b) => b >= nextRankPrice).length : 0;
   const rankMedal = { 1: "🥇", 2: "🥈", 3: "🥉" }[projectedRank as 1 | 2 | 3] ?? "";
 
-  // Quick-pick chips: the exact price of each top-3 rank (holder's bid + $1).
-  // A price that lands on a different rank (again: ties) isn't offered —
-  // a "#2" chip must really take #2.
+  // Quick-pick chips: each top-3 level at the exact delta it costs — the
+  // full price for a new card, or just the raise difference for a card
+  // already on the board (only the delta ever appears). A price that lands
+  // on a different rank (again: ties) isn't offered — a "#2" chip must
+  // really take #2 — and levels at or below the card's own bid cost
+  // nothing, so they're filtered out (holding a level tops up +$1 only
+  // when that genuinely beats a tie above it).
   const rankChips = useMemo(() => {
-    const chips: Array<{ rank: number; price: number }> = [];
+    const chips: Array<{ rank: number; pay: number }> = [];
     for (let k = 1; k <= 3 && k <= bids.length; k++) {
       const price = bids[k - 1] + 1;
       if (price > MAX_BID) break;
-      if (1 + bids.filter((b) => b >= price).length === k) chips.push({ rank: k, price });
+      if (1 + bids.filter((b) => b >= price).length !== k) continue;
+      const pay = existing ? price - existing.bid_amount : price;
+      if (pay >= MIN_BID) chips.push({ rank: k, pay });
     }
     return chips;
-  }, [bids]);
+  }, [bids, existing]);
 
   const fetchedNothing = previewOk != null && previewOk.meta == null && !previewOk.existing && !fetching;
   // Ground truth shown in the card: platform meta first, then the existing
@@ -301,28 +328,31 @@ export function ClaimForm({ bids }: { bids: number[] }) {
       setError(identityErrorMessages("too-low", lang));
       return;
     }
-    if (value > MAX_BID) {
+    if (total > MAX_BID) {
       setError(identityErrorMessages("over-max", lang));
       return;
     }
-    if (existing && value <= existing.bid_amount) {
-      setError(t.raiseAboveCurrent(existing.bid_amount));
-      return;
-    }
+    // A raise always clears the sitting total here (pay ≥ $1 ⇒ total > old
+    // bid); if the board moved since the preview, the server re-checks and
+    // answers with the raise-above message.
     // Pay-time gate: logged-out visitors swap to the inline email-code step
     // (their payment parks and auto-resumes on verify). Server enforces the
     // session too, so a stale client state can never pay anonymously.
     if (!user && !authLoading) {
-      setGate({ identity, platform: effectivePlatform, amount: value });
+      setGate({ identity, platform: effectivePlatform, amount: total });
       return;
     }
-    await submitCheckout({ identity, platform: effectivePlatform, amount: value }, !!existing);
+    await submitCheckout({ identity, platform: effectivePlatform, amount: total }, !!existing);
   };
 
+  // The CTA always quotes the delta: "boost it for $X" when raising (X =
+  // the pay amount), the plain outbid/reserve price for new cards.
   const ctaLabel = loading
     ? "…"
-    : existing && diff > 0
-      ? t.payMore(diff)
+    : existing
+      ? value >= MIN_BID
+        ? t.payMore(value)
+        : t.outbid
       : previewOk
         ? t.outbid
         : t.reserveSpot;
@@ -469,15 +499,15 @@ export function ClaimForm({ bids }: { bids: number[] }) {
             )}
             {existing && (
               <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-center text-xs font-semibold leading-relaxed text-primary text-pretty">
-                {diff > 0
-                  ? t.alreadyOnBoardAt(existing.bid_amount, diff)
+                {value >= MIN_BID
+                  ? t.alreadyOnBoardAt(existing.bid_amount, value)
                   : t.onBoardNoDiff(existing.bid_amount)}
               </p>
             )}
           </div>
         )}
 
-        {/* ── Quick rank picks: exact price of each top-3 spot, one tap ── */}
+        {/* ── Quick level picks: the exact delta each top-3 spot costs, one tap ── */}
         {rankChips.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-1.5">
             {rankChips.map((c) => (
@@ -486,19 +516,19 @@ export function ClaimForm({ bids }: { bids: number[] }) {
                 type="button"
                 onClick={() => {
                   touched.current = true;
-                  setAmount(String(c.price));
+                  setAmount(String(c.pay));
                 }}
                 disabled={loading}
-                aria-label={t.takeRankFor(c.rank, c.price)}
+                aria-label={t.takeRankFor(c.rank, c.pay)}
                 className={
                   "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 " +
-                  (value === c.price
+                  (value === c.pay
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-input text-muted-foreground hover:border-primary/40 hover:text-primary")
                 }
               >
                 #{c.rank}
-                <span className="text-primary tabular-nums">{usd(c.price)}</span>
+                <span className="text-primary tabular-nums">{usd(c.pay)}</span>
               </button>
             ))}
           </div>
@@ -571,17 +601,16 @@ export function ClaimForm({ bids }: { bids: number[] }) {
           </button>
         </div>
 
-        {/* ── Outcome preview: the rank this exact amount lands after payment.
-            Mirrors the board's tie rule — equal bids stay behind the earlier
-            payer — so the number shown is the number paid for. ── */}
+        {/* ── Outcome preview: the rank this pay amount lands after payment
+            (the card's sitting total + the delta). Mirrors the board's tie
+            rule — equal bids stay behind the earlier payer — so the number
+            shown is the number paid for. ── */}
         {value >= MIN_BID && (
           <p
             className="text-center text-xs font-semibold leading-relaxed text-pretty"
             aria-live="polite"
           >
-            {existing && value <= existing.bid_amount ? (
-              <span className="text-destructive">{t.raiseAboveCurrent(existing.bid_amount)}</span>
-            ) : projectedRank === 1 ? (
+            {projectedRank === 1 ? (
               <span className="text-primary">
                 {bids.length === 0 ? t.firstOnBoard : `🥇 ${t.takesRank(1)}`}
               </span>
@@ -592,7 +621,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
                 {nextRankUp > 0 && (
                   <span className="text-primary">
                     {" · "}
-                    {t.moreForRank(nextRankPrice - value, nextRankUp)}
+                    {t.moreForRank(nextRankPrice - total, nextRankUp)}
                   </span>
                 )}
               </span>

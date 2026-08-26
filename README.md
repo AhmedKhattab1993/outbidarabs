@@ -462,11 +462,15 @@ icon + handle (view-only ground truth, exactly as the spec requires).
   preview card showing name/bio/avatar fetched from the platform + cleaned
   destination URL; metadata is decided server-side (existing listing or
   server-side fetch), never client edits;
-  typing an existing account shows "Already on the board at $X. Checkout only
-  charges the $N difference.", the button relabels to "Pay $N more";
-  pressing pay while logged out swaps the form inline to the email-code
+  the amount field is always what you PAY — the full bid for a new card, or
+  just the raise delta for a card already on the board ("Already on the
+  board at $X. Checkout only charges the $N difference." → the button says
+  "Boost it for $N"), with the top-3 level chips quoting each spot's exact
+  delta; pressing pay while logged out swaps the form inline to the email-code
   login step and auto-resumes the parked payment after verify (see Accounts)
-- Claim price pill on every row: bid + $1 (any bid above the holder takes it)
+- Boost pill on every row: defaults to the delta that lifts the card one
+  level (beat the listing directly above +$1, pay only the difference —
+  under ties that can jump several ranks); #1 falls back to +$1 on the lead
 
 ## Feature flags
 

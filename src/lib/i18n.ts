@@ -41,7 +41,7 @@ export const dict = {
     payMore: (n: number) => `ارفعها بـ ${usd(n)}`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
       `البطاقة على اللوحة عند ${usd(bid)} — ادفع فرق ${usd(diff)} بس وارفعها، وتظهر ضمن داعميها.`,
-    onBoardNoDiff: (bid: number) => `البطاقة على اللوحة عند ${usd(bid)} — اكتب مبلغ أعلى عشان ترفعها`,
+    onBoardNoDiff: (bid: number) => `البطاقة على اللوحة عند ${usd(bid)} — اكتب المبلغ اللي هتضيفه وارفعها`,
     alreadyOnList:
       "عايز ترفع بطاقة موجودة؟ الصق نفس الحساب أو الرابط — بتدفع الفرق بس وتظهر ضمن الداعمين.",
     // ── Platform filter ──
@@ -206,7 +206,7 @@ export const dict = {
     alreadyOnBoardAt: (bid: number, diff: number) =>
       `This card is on the board at ${usd(bid)} — pay just the ${usd(diff)} difference to boost it and join its supporters.`,
     onBoardNoDiff: (bid: number) =>
-      `On the board at ${usd(bid)} — set a higher total to boost it`,
+      `On the board at ${usd(bid)} — enter the amount to add and boost it`,
     alreadyOnList:
       "Want to push an existing card higher? Paste the same account or URL — pay only the difference and join its supporters.",
     // ── Platform filter ──

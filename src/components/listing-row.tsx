@@ -5,6 +5,7 @@ import type { Listing } from "@/lib/types";
 import { useLang } from "@/lib/lang-context";
 import { platformLabel } from "@/lib/platforms";
 import { timeAgo, formatUsd } from "@/lib/format";
+import { MAX_BID } from "@/lib/i18n";
 import { Avatar } from "@/components/avatar";
 import { PlatformBadge } from "@/components/platform-icon";
 import { SupportersPanel } from "@/components/supporters-panel";
@@ -12,27 +13,34 @@ import { SupportersPanel } from "@/components/supporters-panel";
 export function ListingRow({
   listing,
   rank,
+  bidAbove,
   isTop3,
   isTop10,
   separatorAfter,
 }: {
   listing: Listing;
   rank: number; // global rank on the board
+  // Total bid of the listing directly above (global board, ties included) —
+  // drives the "up one level" boost default. Undefined for #1.
+  bidAbove?: number;
   isTop3: boolean;
   isTop10: boolean;
   separatorAfter?: { label: string; afterRank: number } | null;
 }) {
   const { t, lang } = useLang();
   const [open, setOpen] = useState(false); // supporters drawer (D9)
-  // Any bid above the current total takes the rank → boost price = bid + $1.
-  const boostPrice = listing.bid_amount + 1;
+  // Boost defaults to the delta that moves the card up one level: beat the
+  // listing directly above (+$1) and pay only the difference from this
+  // card's total. #1 (or unknown neighbor) falls back to +$1 on the lead.
+  const upTotal = bidAbove != null ? Math.min(MAX_BID, bidAbove + 1) : listing.bid_amount + 1;
+  const boostPay = Math.max(1, upTotal - listing.bid_amount);
   // Boost carries the card's identity (canonical URL) so the form opens on
   // that exact card — preview, pay-the-difference state, supporter framing —
-  // one click from row to payment.
+  // one click from row to payment. The amount sent is the delta to pay.
   const boost = () =>
     window.dispatchEvent(
       new CustomEvent("outbidarabs:boost", {
-        detail: { amount: boostPrice, url: listing.url },
+        detail: { pay: boostPay, url: listing.url },
       })
     );
 
@@ -135,14 +143,14 @@ export function ListingRow({
               strokeLinejoin="round"
             />
           </svg>
-          {t.claimShort} {formatUsd(boostPrice)}
+          {t.claimShort} {formatUsd(boostPay)}
         </button>
         <button
           type="button"
           onClick={boost}
           className="pointer-events-none absolute left-1/2 z-20 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-primary-foreground shadow-sm transition-opacity duration-150 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
         >
-          {t.claimRankFor} {formatUsd(boostPrice)}
+          {t.claimRankFor} {formatUsd(boostPay)}
         </button>
         {/* Supporters drawer toggle (D9): ranked payers per card. Lives outside
             the visit <a> so expanding never counts as a click-through. */}

@@ -17,7 +17,7 @@ export const dict = {
     headline: "رتب حسابك على إنستجرام أو تيك توك",
     headlineTagline: "أعلى عرض = المركز الأول",
     supporting:
-      "ادفع عشان حسابك يبقى في الصدارة. إنستجرام وتيك توك أولاً — المواقع والتطبيقات مدعومة كمان.",
+      "أي حد يقدر يضيف بطاقة — صاحبها أو من جمهورها. وأي حد يقدر يدفع عشان يرفعها أعلى. إنستجرام وتيك توك أولاً — المواقع والتطبيقات مدعومة كمان.",
     inputPlaceholder: {
       instagram: "@username أو instagram.com/username",
       tiktok: "@username أو tiktok.com/@username",
@@ -28,19 +28,22 @@ export const dict = {
     },
     startsFrom: "البدايات من",
     outbid: "زايد",
-    reserveSpot: "احجز مركزك",
+    reserveSpot: "ضيفها للوحة",
     amountDollars: "المبلغ بالدولار",
     decreaseBid: "أنقص دولاراً",
     increaseBid: "زد دولاراً",
     takesRank: (n: number) => `ياخد المركز #${n}`,
     moreForRank: (amount: number, n: number) => `+${usd(amount)} للمركز #${n}`,
     firstOnBoard: "هتبقى المركز #1 — أول قائمة على اللوحة 🥇",
-    raiseAboveCurrent: (bid: number) => `سعرك الحالي ${usd(bid)} — ارفع دولاراً على الأقل`,
+    raiseAboveCurrent: (bid: number) =>
+      `البطاقة دي عند ${usd(bid)} — اكتب مبلغ أعلى عشان ترفعها (بتدفع الفرق بس)`,
     takeRankFor: (n: number, price: number) => `خد المركز #${n} مقابل ${usd(price)}`,
-    payMore: (n: number) => `ادفع ${usd(n)} أكثر`,
+    payMore: (n: number) => `ارفعها بـ ${usd(n)}`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
-      `موجود على اللوحة بسعر ${usd(bid)}. الدفع يحتسب فرق ${usd(diff)} فقط.`,
-    alreadyOnList: "موجود على اللوحة بالفعل؟ أدخل نفس الحساب أو الرابط وارفع سعرك.",
+      `البطاقة على اللوحة عند ${usd(bid)} — ادفع فرق ${usd(diff)} بس وارفعها، وتظهر ضمن داعميها.`,
+    onBoardNoDiff: (bid: number) => `البطاقة على اللوحة عند ${usd(bid)} — اكتب مبلغ أعلى عشان ترفعها`,
+    alreadyOnList:
+      "عايز ترفع بطاقة موجودة؟ الصق نفس الحساب أو الرابط — بتدفع الفرق بس وتظهر ضمن الداعمين.",
     // ── Platform filter ──
     filterAll: "الكل",
     boardEmpty: "اللوحة لسه فاضية.",
@@ -65,8 +68,8 @@ export const dict = {
     daysAgo: (n: number) => (n === 1 ? "منذ يوم" : n === 2 ? "منذ يومين" : `منذ ${n} أيام`),
     justNow: "الآن",
     clicks: (n: string) => `${n} نقرة`,
-    claimRankFor: "احصل على هذا المركز مقابل",
-    claimShort: "احصل عليه بـ",
+    claimRankFor: "ارفعها ↑ مقابل",
+    claimShort: "ارفعها بـ",
     top: "الأفضل",
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} من ${total.toLocaleString("en-US")}`,
@@ -93,7 +96,7 @@ export const dict = {
     rulesRankingMax: "الحد الأقصى",
     rulesRankingTime: "بالمزايدة المتساوية، العرض الأقدم يحتفظ بالمركز الأعلى.",
     rulesRanking2:
-      "تقدر ترفع قائمة موجودة بدفع الفرق فقط: أدخل نفس الحساب أو الرابط وزايد بأي مبلغ أعلى من سعرك الحالي — بتدفع الفرق بس، مش السعر كله.",
+      "أي حد يقدر يرفع أي قائمة موجودة — مش بس اللي ضافها. أدخل نفس الحساب أو الرابط وزايد بأي مبلغ أعلى من المبلغ الحالي: بتدفع الفرق بس، مش المبلغ كله، وتظهر ضمن داعمي القائمة.",
     rulesPlatformsTitle: "المنصات المدعومة",
     rulesPlatformsBody:
       "إنستجرام وتيك توك أولاً — حسابات التواصل الاجتماعي هي محور اللوحة. كمان مدعوم: إكس، لينكدإن، المواقع، والتطبيقات (App Store / Google Play). كل قائمة تحمل أيقونة منصتها على اللوحة.",
@@ -178,7 +181,7 @@ export const dict = {
     headline: "Rank your Instagram or TikTok",
     headlineTagline: "Highest bid = #1",
     supporting:
-      "Pay to put your account at the top. Instagram & TikTok first — websites and apps are supported too.",
+      "Anyone can add a card — its owner or a fan. And anyone can pay to push it higher. Instagram & TikTok first — websites and apps are supported too.",
     inputPlaceholder: {
       instagram: "@username or instagram.com/username",
       tiktok: "@username or tiktok.com/@username",
@@ -189,19 +192,23 @@ export const dict = {
     },
     startsFrom: "Starting from",
     outbid: "Outbid",
-    reserveSpot: "Take your spot",
+    reserveSpot: "Add to board",
     amountDollars: "Amount in dollars",
     decreaseBid: "Decrease bid by one dollar",
     increaseBid: "Increase bid by one dollar",
     takesRank: (n: number) => `Takes #${n}`,
     moreForRank: (amount: number, n: number) => `+${usd(amount)} takes #${n}`,
     firstOnBoard: "You'll be #1 — the board's first listing 🥇",
-    raiseAboveCurrent: (bid: number) => `Your current bid is ${usd(bid)} — raise it by at least $1`,
+    raiseAboveCurrent: (bid: number) =>
+      `This card sits at ${usd(bid)} — enter a higher amount to boost it (you only pay the difference)`,
     takeRankFor: (n: number, price: number) => `Take #${n} for ${usd(price)}`,
-    payMore: (n: number) => `Pay ${usd(n)} more`,
+    payMore: (n: number) => `Boost it for ${usd(n)}`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
-      `Already on the board at ${usd(bid)}. Checkout only charges the ${usd(diff)} difference.`,
-    alreadyOnList: "Already on the list? Enter the same account or URL and up your bid.",
+      `This card is on the board at ${usd(bid)} — pay just the ${usd(diff)} difference to boost it and join its supporters.`,
+    onBoardNoDiff: (bid: number) =>
+      `On the board at ${usd(bid)} — set a higher total to boost it`,
+    alreadyOnList:
+      "Want to push an existing card higher? Paste the same account or URL — pay only the difference and join its supporters.",
     // ── Platform filter ──
     filterAll: "All",
     boardEmpty: "The board is still empty.",
@@ -224,8 +231,8 @@ export const dict = {
     daysAgo: (n: number) => (n === 1 ? "1 day ago" : `${n} days ago`),
     justNow: "just now",
     clicks: (n: string) => `${n} clicks`,
-    claimRankFor: "take this rank for",
-    claimShort: "take it for",
+    claimRankFor: "boost it ↑ for",
+    claimShort: "boost it for",
     top: "Top",
     ofCount: (from: number, to: number, total: number) =>
       `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
@@ -252,7 +259,7 @@ export const dict = {
     rulesRankingMax: "$999,999 maximum.",
     rulesRankingTime: "Equal bids: the older bid keeps the higher rank.",
     rulesRanking2:
-      "You can raise an existing listing by paying only the difference: enter the same account or URL and bid anything above your current bid — you pay just the difference, not the full amount.",
+      "Anyone can raise an existing listing — not just whoever added it. Enter the same account or URL and bid anything above the current total: you pay only the difference, not the full amount, and you appear among the card's supporters.",
     rulesPlatformsTitle: "Supported platforms",
     rulesPlatformsBody:
       "Instagram and TikTok first — social accounts are the heart of the board. Also supported: X, LinkedIn, websites, and mobile apps (App Store / Google Play). Every listing carries its platform icon on the board.",

@@ -462,9 +462,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
               <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-center text-xs font-semibold leading-relaxed text-primary text-pretty">
                 {diff > 0
                   ? t.alreadyOnBoardAt(existing.bid_amount, diff)
-                  : lang === "ar"
-                    ? `موجود على اللوحة بسعر ${usd(existing.bid_amount)} — زايد أعلى منه`
-                    : `On the board at ${usd(existing.bid_amount)} — bid above it`}
+                  : t.onBoardNoDiff(existing.bid_amount)}
               </p>
             )}
           </div>

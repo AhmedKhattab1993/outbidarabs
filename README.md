@@ -388,6 +388,13 @@ ownership — anyone can pay, anyone can boost.
   (e.g. `hello@outbidarabs.lol`) is NOT hosted by Resend — needs a
   forwarding/MX setup (ImprovMX etc.) before publishing that address
   as a contact.
+  **Required auth-config state on every hosted project** (verify after any
+  Supabase project creation or config migration — mismatches break login):
+  `mailer_autoconfirm = true` (else first-time users get the link-based
+  confirm-email instead of the code email — the link does nothing in our
+  app), `mailer_otp_length = 6` (Supabase's newer default is 8, which the
+  6-digit input rejects), `mailer_otp_exp = 600`, magic-link template =
+  `supabase/templates/magic_link.html`.
 - **Mock mode**: the whole flow works keyless — in-memory users/sessions/
   payments mirror the Supabase path, seeded with two demo supporters.
   The mock OTP code is returned by the API and shown in the UI (mock only).

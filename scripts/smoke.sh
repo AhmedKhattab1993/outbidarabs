@@ -258,13 +258,10 @@ if echo "$MOCK_DETECT" | grep -q '"devCode"'; then
   MY_ID=$(echo "$ME" | json "j.user.id")
   MY_PUB=$(echo "$ME" | json "j.user.publicId")
 
-  R=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -X POST "$BASE/api/claims" \
-    -H 'content-type: application/json' -d '{"listingId":"seed-0"}')
-  check "claims without session -> 401" $([ "$R" = "401" ] && echo 0 || echo 1)
-
   if [ -n "$ID" ] && [ "$ID" != "ERR" ]; then
     CARDS=$(curl -s --max-time 20 "$BASE/api/cards/$ID")
     check "card state has no email/payer fields" $(echo "$CARDS" | grep -qE '"(payer_email|payerEmail|email)"' && echo 1 || echo 0)
+    check "card state has no owner field (agnostic cards)" $(echo "$CARDS" | grep -q '"owner"' && echo 1 || echo 0)
     if [ -n "$MY_ID" ] && [ "$MY_ID" != "ERR" ] && [ ${#MY_ID} -gt 8 ]; then
       check "card state has no auth uuid" $(echo "$CARDS" | grep -q "$MY_ID" && echo 1 || echo 0)
     fi

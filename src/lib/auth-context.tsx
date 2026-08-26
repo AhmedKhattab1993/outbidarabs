@@ -13,8 +13,7 @@ import { useLang } from "@/lib/lang-context";
 import { EmailCodeForm } from "@/components/email-code-form";
 
 // Client auth state + the global login modal. Login is only ever *prompted*
-// (claiming / profile / post-payment attribution) — never required to browse
-// or pay (spec D5).
+// (profile / post-payment attribution) — never required to browse or pay.
 
 export type AuthUser = {
   id: string;

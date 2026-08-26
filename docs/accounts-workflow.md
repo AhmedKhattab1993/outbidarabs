@@ -1,15 +1,17 @@
-# Accounts & Claims — refined workflow spec
+# Accounts — refined workflow spec
 
-Status: DRAFT — open decisions marked **[D#]** below, recommendations included.
+Status: SHIPPED, with one superseding decision — **cards are agnostic:
+no ownership** (D1/D2/D6 below are superseded). Open decisions marked
+**[D#]** below, recommendations included.
 Terminology: "card" (user-facing) = `listings` row (code). "Supporter" = anyone
-who paid toward a card. "Owner" = user who claimed the card as theirs.
+who paid toward a card. ("Owner" = removed concept: a card belongs to no one.)
 
 ## Core principle
 
 **Never block payment behind login.** Accounts are optional and created
 *after* value is delivered. Dodo already collects the payer's email at
 checkout — that email is the attribution key, so the account is ~free for the
-user: one 6-digit code after payment, or later, claims all past payments.
+user: one 6-digit code after payment, or later, attaches all past payments.
 
 ## Flows
 
@@ -30,30 +32,26 @@ user: one 6-digit code after payment, or later, claims all past payments.
   directly. No post-payment step needed.
 - Login is only ever *prompted*, never *required*, for supporting.
 
-### 3. Owner claims a card
-- Card detail → "This is me / هذا حسابي" → email-code login (claiming
-  requires an account; supporting does not).
-- Claim stores `claims(listing_id, user_id)` — **exactly one owner per card**
-  (first-come; conflicts resolved manually via existing takedown backstop).
-- Owner gets: verified badge on the card, pinned top slot on the supporters
-  list if they've paid, and edit rights over card description/image
-  (never the URL). **[D1, D6]**
+### 3. Owner claims a card — **REMOVED (agnostic cards)**
+Superseded: there is no ownership notion. Anyone can pay toward any card;
+the first payer's submission fixes the (source-fetched) metadata and nobody
+can edit it afterward. The `claims` table and the "This is me" flow were
+removed in `migrations/20250824000004_no_claims.sql`.
 
 ### 4. Profile (`/profile`, private to the user)
 - Editable: display name, avatar, public/private toggle. Email shown
   read-only (it's the login key). Nothing else. **[D4]**
 - **My payments**: every succeeded payment, grouped per card — card, amount,
   date, and the user's rank on that card's supporters list. **[D7]**
-- **My claims**: cards the user owns, with their current board rank.
-- Public profile (`/u/[id]`): name, avatar, cards supported with totals,
-  claims. Visible **only** if public; private users have no public page at
+- Public profile (`/u/[id]`): name, avatar, cards supported with totals.
+  Visible **only** if public; private users have no public page at
   all (404). On card supporters lists, private users appear as
   "Anonymous / مجهول" with amounts visible. **[D3, D8]**
 
 ### 5. Card supporters list (new surface)
 - Every card gets a ranked list of users who paid toward it, ordered by
   total paid to that card (ties: earliest payment first).
-- Anonymous rows: "Anonymous" + amount. Owner (if claimed): badge + pinned.
+- Anonymous rows: "Anonymous" + amount. Pure ranking — no badges, no pinning.
 - Surface: expandable row / drawer on the board, keeping the existing
   `/go/[id]` click-through as the separate "visit" action. **[D9]**
 
@@ -80,13 +78,8 @@ create table payments (
   created_at timestamptz not null default now()
 );
 
--- ownership claims
-create table claims (
-  listing_id uuid primary key references listings(id) on delete cascade,
-  user_id uuid not null references profiles(id),
-  status text not null default 'active',
-  created_at timestamptz not null default now()
-);
+-- ownership claims — REMOVED (agnostic cards, 20250824000004_no_claims.sql);
+-- no table replaces it.
 
 -- Supporters ranking per card: view over payments grouped by
 -- coalesce(user_id, payer_email hash) — collapses anonymous pre-signup
@@ -97,7 +90,7 @@ create table claims (
   user_id = … where payer_email = auth email and user_id is null`. The code
   proves email ownership → attribution is safe.
 - Auth: **Supabase Auth email OTP** (6-digit code) — no new vendor. RLS
-  (shipped, after the lockdown pass): `profiles`, `claims`, `payments`,
+  (shipped, after the lockdown pass): `profiles`, `payments`,
   `otp_rate_limit`, `checkout_tokens` are all **service-role only** (RLS on,
   no anon/authenticated policies, grants revoked) — the app reads/writes
   them exclusively through service-role routes; public supporters data
@@ -109,14 +102,14 @@ create table claims (
 
 | # | Decision | Recommendation |
 |---|----------|----------------|
-| D1 | Owner verification: honor system (login = claim) vs bio-code proof vs domain/email match | Honor system now; badge says "claimed" not "verified"; add bio-verification later. Zero friction, disputes handled by existing manual takedown |
-| D2 | One owner per card vs multiple claimants | Exactly one owner + unlimited supporters ("one to many" = one card, many users) |
+| D1 | Owner verification: honor system (login = claim) vs bio-code proof vs domain/email match | ~~Honor system now~~ **SUPERSEDED: no ownership at all — agnostic cards** |
+| D2 | One owner per card vs multiple claimants | ~~Exactly one owner~~ **SUPERSEDED: no owners — anyone pays, anyone boosts** |
 | D3 | New users public or private by default | **Public** — recognition is the growth engine; prominent toggle; amounts always visible either way |
 | D4 | Avatar: generated-only vs upload (moderation + storage) | Generated initials/gradient first (zero moderation); upload as fast-follow |
-| D5 | Gate: is login ever required? | Only to claim ownership & manage profile. Supporting stays anonymous forever |
-| D6 | Does claiming grant card edit rights? | Yes for description/image; URL immutable (URL change = new card) |
+| D5 | Gate: is login ever required? | Only to manage a profile. Supporting stays anonymous forever (ownership gate removed) |
+| D6 | Does claiming grant card edit rights? | ~~Yes for description/image~~ **SUPERSEDED: no edits — metadata is source-fetched and immutable after creation** |
 | D7 | Profile shows refunds/failed? | Succeeded only (matches webhook path) |
-| D8 | Private user on a supporters list | "Anonymous" + amount; even card owner cannot unmask |
+| D8 | Private user on a supporters list | "Anonymous" + amount; nobody can unmask |
 | D9 | Supporters list surface | Expandable row/drawer; visit stays a separate click (keeps analytics) |
 | D10 | Email sender for codes | Supabase Auth OTP; custom SMTP (Resend) before launch — free-tier auth email limits will bite |
 | D11 | Existing prod data | Untouched; all pre-accounts payments stay anonymous (board is empty today — cheap to decide now) |

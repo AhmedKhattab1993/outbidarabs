@@ -242,11 +242,11 @@ auth):
 8. Accounts & privacy (mock layer; a configured payment provider skips it
    before any auth call fires — no OTP quota consumed): send-code validation
    + devCode, wrong-code rejection, verify → session cookie →
-   `/api/auth/me`, claims without session → 401, card-state JSON free of
-   emails/payer fields/auth uuids, attributed supporter rows keyed by the
-   opaque `u:<public_id>` (never `u:<auth uuid>`), `/u/` by public id (200)
-   vs auth id (404), and payment-status payer-email reveal with vs without
-   the checkout cookie
+   `/api/auth/me`, card-state JSON free of emails/payer fields/auth uuids and
+   free of any owner field (agnostic cards), attributed supporter rows keyed
+   by the opaque `u:<public_id>` (never `u:<auth uuid>`), `/u/` by public id
+   (200) vs auth id (404), and payment-status payer-email reveal with vs
+   without the checkout cookie
 
 **Serverless caveat:** mock mode keeps state in the lambda's memory, so on
 Vercel each instance has its own board and stateful checks (raise/lookup) can
@@ -309,11 +309,12 @@ Add all env vars from `.env.example` in the project settings and point
 `NEXT_PUBLIC_SITE_URL` at the final domain. Optionally set
 `NEXT_PUBLIC_LAUNCH_DATE` (ISO) — it feeds the earnings card and About page.
 
-## Accounts & claims (docs/accounts-workflow.md)
+## Accounts (docs/accounts-workflow.md)
 
 Optional email-code accounts built on Supabase Auth OTP — **never required to
-browse or pay**. Login is only prompted for claiming card ownership, managing
-a profile, and the optional post-payment signup prompt.
+browse or pay**. Login is only prompted for managing a profile and the
+optional post-payment signup prompt. Cards are agnostic: no ownership —
+anyone can pay, anyone can boost.
 
 - **Flow**: pay anonymously → the Dodo webhook records `payments.payer_email`
   → the success page offers a non-blocking prompt ("code sent to you@x.com")
@@ -324,23 +325,21 @@ a profile, and the optional post-payment signup prompt.
   in `checkout_tokens` by the webhook apply), and `/api/payment-status`
   matches it by value — anyone else holding the payment id gets
   `applied: true, payerEmail: null` (no prompt, no PII).
-- **Claims** (`claims`, one owner per card — `listing_id` is the PK): "This is
-  me / هذا حسابي" in the card drawer; honor-system (D1, badge says "claimed",
-  not "verified"); owner can edit card description/image, never the URL (D6).
 - **Supporters drawer** (chevron on each board row, D9): users ranked by total
-  paid to that card (ties: earliest first). Private users render as
-  "Anonymous / مجهول" with amounts visible (D8); the claimed owner is pinned
-  with a badge when they've paid. The visit action stays `/go/[id]`.
+  paid to that card (ties: earliest first) — a pure ranking, no pinning.
+  Private users render as "Anonymous / مجهول" with amounts visible (D8).
+  The visit action stays `/go/[id]`. Card metadata is source-fetched and
+  immutable after creation.
 - **Profile** `/profile`: name, public toggle (default public, D3), read-only
-  email, payments grouped per card with the user's supporters rank, claimed
-  cards with board rank. Public page `/u/[id]` — private users 404.
-- **Privacy**: `payments`, `profiles` and `claims` all have RLS with no
-  public policies and revoked anon grants — the app touches them only via
-  the service role. `profiles.id` and `claims.user_id` are auth uuids, so
-  neither table is anon-readable (the anon key is public); public reads go
-  through `supporters_view`, which resolves identities and never exposes
-  `payer_email`. Public surfaces address users by the opaque
-  `profiles.public_id` (`/u/[id]`, supporter rows, the view) — auth uuids
+  email, payments grouped per card with the user's supporters rank. Public
+  page `/u/[id]` — private users 404.
+- **Privacy**: `payments` and `profiles` have RLS with no public policies and
+  revoked anon grants — the app touches them only via the service role.
+  `profiles.id` is the auth uuid, so the table is not anon-readable (the anon
+  key is public); public reads go through `supporters_view`, which resolves
+  identities and never exposes `payer_email`. Public surfaces address users
+  by the opaque `profiles.public_id` (`/u/[id]`, supporter rows, the view) —
+  auth uuids
   never appear publicly (supporter row keys are `u:<public_id>` for users,
   server-side HMAC digests for anonymous groups), and old `/u/<auth-uuid>`
   links simply 404.
@@ -374,10 +373,10 @@ a profile, and the optional post-payment signup prompt.
   forwarding/MX setup (ImprovMX etc.) before publishing that address
   as a contact.
 - **Mock mode**: the whole flow works keyless — in-memory users/sessions/
-  payments/claims mirror the Supabase path, seeded with two demo supporters.
+  payments mirror the Supabase path, seeded with two demo supporters.
   The mock OTP code is returned by the API and shown in the UI (mock only).
   The mock payments path accepts a browser `payerHint` so the typed email in
-  the post-payment prompt can retro-claim demo payments, mirroring Dodo's
+  the post-payment prompt can retro-tag demo payments, mirroring Dodo's
   email attribution. Real Dodo checkouts ignore client hints entirely — the
   webhook takes the payer email from the verified payload, plus
   `metadata.user_id` set server-side when the payer was logged in.

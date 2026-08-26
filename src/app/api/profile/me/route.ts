@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getClaimedCards,
   getPaymentsByCard,
   getProfile,
   getSessionUser,
@@ -10,17 +9,16 @@ import {
 export const dynamic = "force-dynamic";
 
 // Private profile data: profile fields + payments grouped per card (with the
-// user's rank on each card's supporters list) + claimed cards with board rank.
+// user's rank on each card's supporters list).
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "login_required" }, { status: 401 });
 
-  const [profile, cards, claims] = await Promise.all([
+  const [profile, cards] = await Promise.all([
     getProfile(user.id),
     getPaymentsByCard(user.id, user.email),
-    getClaimedCards(user.id),
   ]);
-  return NextResponse.json({ email: user.email, profile, cards, claims });
+  return NextResponse.json({ email: user.email, profile, cards });
 }
 
 // Profile edits (spec flow 4): display name + public/private toggle only.

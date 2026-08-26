@@ -1,7 +1,8 @@
-// Accounts & claims data layer (docs/accounts-workflow.md).
+// Accounts data layer (docs/accounts-workflow.md).
 // Mirrors store.ts's dual-store pattern: Supabase (Auth + tables) when
 // configured, a fully in-memory mock store when keyless. Login is email-code
 // only (Supabase Auth OTP in real mode); browsing and paying never require it.
+// Cards are agnostic — no ownership: anyone pays, anyone boosts.
 
 import { createHmac } from "node:crypto";
 import { cookies } from "next/headers";
@@ -16,7 +17,6 @@ import {
   supabaseAdmin,
   type MockPayment,
 } from "@/lib/store";
-import { getRanks } from "@/lib/store";
 import type { Listing } from "@/lib/types";
 import { isPlatform } from "@/lib/platforms";
 
@@ -46,19 +46,14 @@ export type Supporter = {
   publicId: string | null; // profiles.public_id (null for anonymous rows)
   total: number;
   firstPaidAt: string;
-  isOwner: boolean;
 };
 
-/** Internal ranking row: carries the auth uuid for owner-pin + self-rank —
- *  stripped before leaving this module. */
+/** Internal ranking row: carries the auth uuid for self-rank — stripped
+ *  before leaving this module. */
 type SupporterGroup = Supporter & { userId: string | null };
 
 export type CardState = {
   supporters: Supporter[];
-  owner: { publicId: string | null; name: string | null; isPublic: boolean } | null;
-  // Current editable card fields (D6) so the owner editor prefills real
-  // values instead of wiping untouched ones.
-  card: { description: string | null; imageUrl: string | null } | null;
 };
 
 export type PaymentsByCard = {
@@ -68,12 +63,6 @@ export type PaymentsByCard = {
   firstPaidAt: string;
   lastPaidAt: string;
   rank: number | null; // rank on the card's supporters list
-};
-
-export type ClaimedCard = {
-  listing: Pick<Listing, "id" | "display_name" | "platform" | "image_url">;
-  boardRank: number;
-  claimedAt: string;
 };
 
 // ───────────────────────────────────────────────────────────
@@ -123,7 +112,6 @@ type MockUser = Profile & {
 const mockGlobal = globalThis as unknown as {
   __obMockUsers?: Map<string, MockUser>;
   __obMockSessions?: Map<string, { userId: string; email: string; expiresAt: number }>;
-  __obMockClaims?: Map<string, { user_id: string; created_at: string }>;
 };
 
 function mockUsers(): Map<string, MockUser> {
@@ -158,11 +146,6 @@ function mockUsers(): Map<string, MockUser> {
 function mockSessions(): Map<string, { userId: string; email: string; expiresAt: number }> {
   if (!mockGlobal.__obMockSessions) mockGlobal.__obMockSessions = new Map();
   return mockGlobal.__obMockSessions;
-}
-
-function mockClaims(): Map<string, { user_id: string; created_at: string }> {
-  if (!mockGlobal.__obMockClaims) mockGlobal.__obMockClaims = new Map();
-  return mockGlobal.__obMockClaims;
 }
 
 function mockUserById(id: string): MockUser | null {
@@ -359,7 +342,7 @@ async function ensureProfile(userId: string, email: string): Promise<void> {
   if (error) console.error("profile upsert failed", userId, error.message);
 }
 
-/** Attribution backfill: the verified code proves email ownership, so claim
+/** Attribution backfill: the verified code proves email ownership, so attach
  *  every anonymous payment with that payer_email. */
 export async function backfillPayments(email: string, userId: string): Promise<void> {
   const norm = normalizePayerEmail(email);
@@ -497,72 +480,6 @@ export async function updateProfile(
 }
 
 // ───────────────────────────────────────────────────────────
-// Claims (one owner per card)
-// ───────────────────────────────────────────────────────────
-
-export type ClaimOutcome =
-  | { ok: true; owner: { userId: string } }
-  | { ok: false; reason: "already-claimed"; owner: { userId: string; name: string | null } }
-  | { ok: false; reason: "not-found" };
-
-export async function getClaim(listingId: string): Promise<{ userId: string; createdAt: string } | null> {
-  if (MOCK_MODE) {
-    const c = mockClaims().get(listingId);
-    return c ? { userId: c.user_id, createdAt: c.created_at } : null;
-  }
-  const { data } = await supabaseAdmin()
-    .from("claims")
-    .select("user_id, created_at")
-    .eq("listing_id", listingId)
-    .maybeSingle();
-  return data ? { userId: (data as any).user_id, createdAt: (data as any).created_at } : null;
-}
-
-export async function createClaim(listingId: string, userId: string): Promise<ClaimOutcome> {
-  if (MOCK_MODE) {
-    if (!(await mockListingsInclude(listingId))) return { ok: false, reason: "not-found" };
-    const existing = mockClaims().get(listingId);
-    if (existing) {
-      if (existing.user_id === userId) return { ok: true, owner: { userId } };
-      return {
-        ok: false,
-        reason: "already-claimed",
-        owner: { userId: existing.user_id, name: mockUserById(existing.user_id)?.display_name ?? null },
-      };
-    }
-    mockClaims().set(listingId, { user_id: userId, created_at: new Date().toISOString() });
-    return { ok: true, owner: { userId } };
-  }
-
-  // Insert with ignore-duplicates, then read back: a race between two claims
-  // resolves to whoever inserted first (listing_id is the PK).
-  const { error } = await supabaseAdmin()
-    .from("claims")
-    .insert({ listing_id: listingId, user_id: userId });
-  if (error) {
-    if (error.code === "23505") {
-      const claim = await getClaim(listingId);
-      if (claim) {
-        if (claim.userId === userId) return { ok: true, owner: { userId } };
-        const ownerProfile = await getProfile(claim.userId);
-        return {
-          ok: false,
-          reason: "already-claimed",
-          owner: { userId: claim.userId, name: ownerProfile?.is_public ? ownerProfile.display_name || null : null },
-        };
-      }
-    }
-    console.error("claim insert failed", listingId, error.message);
-    return { ok: false, reason: "not-found" };
-  }
-  return { ok: true, owner: { userId } };
-}
-
-async function mockListingsInclude(id: string): Promise<boolean> {
-  return (await getListingById(id)) != null;
-}
-
-// ───────────────────────────────────────────────────────────
 // Supporters (ranked per card: total paid desc, earliest first)
 // ───────────────────────────────────────────────────────────
 
@@ -619,13 +536,12 @@ function paymentGroupKey(listingId: string, r: RawPayment): string {
   return anonSupporterKey(listingId, r.payer_email);
 }
 
-/** Shared ranking: group payments by identity, total desc, earliest first,
- *  owner pinned to the top when they've paid. Private profiles → anonymous. */
+/** Shared ranking: group payments by identity, total desc, earliest first.
+ *  Private profiles → anonymous. Pure ranking — no pinning, no ownership. */
 function rankGroups(
   listingId: string,
   rows: RawPayment[],
-  profiles: Map<string, Profile>,
-  ownerUserId: string | null
+  profiles: Map<string, Profile>
 ): SupporterGroup[] {
   const groups = new Map<string, { userId: string | null; total: number; firstPaidAt: string }>();
   for (const r of rows) {
@@ -651,30 +567,19 @@ function rankGroups(
         userId: g.userId,
         total: g.total,
         firstPaidAt: g.firstPaidAt,
-        isOwner: !!g.userId && g.userId === ownerUserId,
       };
     });
 
-  // Owner pins to the top when they've paid (spec flow 3).
-  if (ownerUserId) {
-    const idx = supporters.findIndex((s) => s.userId === ownerUserId);
-    if (idx > 0) {
-      const [owner] = supporters.splice(idx, 1);
-      owner.isOwner = true;
-      supporters.unshift(owner);
-    }
-  }
   return supporters;
 }
 
 /** Single-card ranking (card drawer). Public shape — auth uuids stripped. */
 async function rankSupporters(
   listingId: string,
-  rows: RawPayment[],
-  ownerUserId: string | null
+  rows: RawPayment[]
 ): Promise<SupporterGroup[]> {
   const profiles = await profilesByIds([...new Set(rows.map((r) => r.user_id).filter((x): x is string => !!x))]);
-  return rankGroups(listingId, rows, profiles, ownerUserId);
+  return rankGroups(listingId, rows, profiles);
 }
 
 /** Profiles for a set of auth ids — one query (mock: in-memory scan). */
@@ -705,38 +610,22 @@ const toPublicSupporters = (groups: SupporterGroup[]): Supporter[] =>
 /** Bulk ranking (profile page): one payments query + one profiles query for
  *  many cards — replaces the per-card getCardState loop (N+1). */
 async function rankSupportersBulk(
-  rowsByListing: Map<string, RawPayment[]>,
-  ownersByListing: Map<string, string>
+  rowsByListing: Map<string, RawPayment[]>
 ): Promise<Map<string, SupporterGroup[]>> {
   const userIds = new Set<string>();
   for (const rows of rowsByListing.values()) for (const r of rows) if (r.user_id) userIds.add(r.user_id);
   const profiles = await profilesByIds([...userIds]);
   const out = new Map<string, SupporterGroup[]>();
   for (const [listingId, rows] of rowsByListing) {
-    out.set(listingId, rankGroups(listingId, rows, profiles, ownersByListing.get(listingId) ?? null));
+    out.set(listingId, rankGroups(listingId, rows, profiles));
   }
   return out;
 }
 
 export async function getCardState(listingId: string): Promise<CardState> {
-  const [claim, listing] = await Promise.all([getClaim(listingId), getListingById(listingId)]);
-  const card = listing
-    ? { description: listing.description ?? null, imageUrl: listing.image_url ?? null }
-    : null;
-  const ownerProfile = claim ? await getProfile(claim.userId) : null;
-  const owner = claim
-    ? {
-        publicId: ownerProfile?.public_id ?? null,
-        name: ownerProfile?.is_public ? ownerProfile.display_name || null : null,
-        isPublic: ownerProfile?.is_public ?? false,
-      }
-    : null;
-
   const rows = await fetchCardPayments(listingId);
   return {
-    supporters: toPublicSupporters(await rankSupporters(listingId, rows, claim?.userId ?? null)),
-    owner,
-    card,
+    supporters: toPublicSupporters(await rankSupporters(listingId, rows)),
   };
 }
 
@@ -760,12 +649,11 @@ async function fetchCardPayments(listingId: string): Promise<RawPayment[]> {
 /** Internal single-card ranking (self-rank lookups need the group key,
  *  which the public CardState shape strips). */
 async function getCardGroups(listingId: string): Promise<SupporterGroup[]> {
-  const [rows, claim] = await Promise.all([fetchCardPayments(listingId), getClaim(listingId)]);
-  return rankSupporters(listingId, rows, claim?.userId ?? null);
+  return rankSupporters(listingId, await fetchCardPayments(listingId));
 }
 
 // ───────────────────────────────────────────────────────────
-// Profile views: payments grouped per card + claims
+// Profile views: payments grouped per card
 // ───────────────────────────────────────────────────────────
 
 type ListingLite = PaymentsByCard["listing"];
@@ -867,7 +755,7 @@ export async function getPaymentsByCard(userId: string, email: string): Promise<
 
   const out: PaymentsByCard[] = [];
   // Ranks: mock keeps the trivial per-card loop; real mode does one bulk pass
-  // (one payments query + one claims query over the user's cards) instead of
+  // (one payments query over the user's cards) instead of
   // a getCardState call per card (N+1).
   let ranks: Map<string, number | null>;
   if (MOCK_MODE) {
@@ -879,26 +767,19 @@ export async function getPaymentsByCard(userId: string, email: string): Promise<
     }
   } else {
     const listingIds = [...byCard.keys()];
-    const [allPayments, claimRows] = await Promise.all([
-      supabaseAdmin()
-        .from("payments")
-        .select("checkout_id, listing_id, user_id, payer_email, amount, created_at")
-        .in("listing_id", listingIds)
-        .order("created_at", { ascending: true })
-        .limit(5000),
-      supabaseAdmin().from("claims").select("listing_id, user_id").in("listing_id", listingIds),
-    ]);
+    const allPayments = await supabaseAdmin()
+      .from("payments")
+      .select("checkout_id, listing_id, user_id, payer_email, amount, created_at")
+      .in("listing_id", listingIds)
+      .order("created_at", { ascending: true })
+      .limit(5000);
     const rowsByListing = new Map<string, RawPayment[]>();
     for (const r of (allPayments.data ?? []) as unknown as RawPayment[]) {
       const list = rowsByListing.get(r.listing_id) ?? [];
       list.push(r);
       rowsByListing.set(r.listing_id, list);
     }
-    const ownersByListing = new Map<string, string>();
-    for (const c of (claimRows.data ?? []) as Array<{ listing_id: string; user_id: string }>) {
-      ownersByListing.set(c.listing_id, c.user_id);
-    }
-    const groupsByListing = await rankSupportersBulk(rowsByListing, ownersByListing);
+    const groupsByListing = await rankSupportersBulk(rowsByListing);
     ranks = new Map();
     for (const listingId of listingIds) {
       const groups = groupsByListing.get(listingId) ?? [];
@@ -915,90 +796,15 @@ export async function getPaymentsByCard(userId: string, email: string): Promise<
   return out.sort((a, b) => b.total - a.total || a.lastPaidAt.localeCompare(b.lastPaidAt));
 }
 
-export async function getClaimedCards(userId: string): Promise<ClaimedCard[]> {
-  let claimRows: Array<{ listing_id: string; created_at: string }>;
-  if (MOCK_MODE) {
-    claimRows = [...mockClaims().entries()]
-      .filter(([, c]) => c.user_id === userId)
-      .map(([listing_id, c]) => ({ listing_id, created_at: c.created_at }));
-  } else {
-    const { data } = await supabaseAdmin()
-      .from("claims")
-      .select("listing_id, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true });
-    claimRows = (data ?? []) as any[];
-  }
-  if (claimRows.length === 0) return [];
-
-  const listings = await listingsByIds(claimRows.map((c) => c.listing_id));
-  const ranks = await getRanks(claimRows.map((c) => c.listing_id));
-  const out: ClaimedCard[] = [];
-  for (const c of claimRows) {
-    const listing = listings.get(c.listing_id);
-    if (!listing) continue;
-    out.push({ listing, boardRank: ranks.get(c.listing_id) ?? 0, claimedAt: c.created_at });
-  }
-  return out;
-}
-
 /** Public profile page data — resolved by the opaque public id (/u/[id]);
  *  null when private or missing (→ 404). */
 export async function getPublicProfile(
   publicId: string
-): Promise<{ profile: Profile; cards: PaymentsByCard[]; claims: ClaimedCard[] } | null> {
+): Promise<{ profile: Profile; cards: PaymentsByCard[] } | null> {
   const profile = await getProfileByPublicId(publicId);
   if (!profile || !profile.is_public) return null;
   // Empty email arm: the public page must not expose email-matched rows
   // beyond the user's own attributed payments — user_id matches only.
-  const [cards, claims] = await Promise.all([
-    getPaymentsByCard(profile.id, ""),
-    getClaimedCards(profile.id),
-  ]);
-  return { profile, cards, claims };
-}
-
-// ───────────────────────────────────────────────────────────
-// Owner card edits (D6: description + image only; URL immutable)
-// ───────────────────────────────────────────────────────────
-
-export const MAX_CARD_DESCRIPTION = 280;
-
-export async function ownerUpdateListing(
-  listingId: string,
-  ownerUserId: string,
-  patch: { description?: string | null; image_url?: string | null }
-): Promise<Listing | null> {
-  const claim = await getClaim(listingId);
-  if (!claim || claim.userId !== ownerUserId) return null;
-
-  const update: Record<string, unknown> = {};
-  if (patch.description !== undefined) {
-    update.description = patch.description ? patch.description.trim().slice(0, MAX_CARD_DESCRIPTION) : null;
-  }
-  if (patch.image_url !== undefined) {
-    const url = patch.image_url?.trim() ?? "";
-    if (url && !/^https?:\/\/.+/i.test(url)) return null;
-    update.image_url = url ? url.slice(0, 480) : null;
-  }
-  if (Object.keys(update).length === 0) return null;
-
-  if (MOCK_MODE) {
-    const l = await getListingById(listingId);
-    if (!l) return null;
-    if ("description" in update) l.description = update.description as string | null;
-    if ("image_url" in update) l.image_url = update.image_url as string | null;
-    return l;
-  }
-  const { data, error } = await supabaseAdmin()
-    .from("listings")
-    .update(update)
-    .eq("id", listingId)
-    .select("*")
-    .single();
-  if (error) {
-    console.error("owner listing update failed", listingId, error.message);
-    return null;
-  }
-  return data as Listing;
+  const cards = await getPaymentsByCard(profile.id, "");
+  return { profile, cards };
 }

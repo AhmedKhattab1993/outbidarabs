@@ -9,17 +9,15 @@ import { EmailCodeForm } from "@/components/email-code-form";
 import { UserAvatar } from "@/components/user-avatar";
 import { Avatar } from "@/components/avatar";
 import { PlatformBadge } from "@/components/platform-icon";
-import type { ClaimedCard, PaymentsByCard, Profile } from "@/lib/accounts";
+import type { PaymentsByCard, Profile } from "@/lib/accounts";
 
 // Private profile (spec flow 4): name + public toggle (email read-only),
-// payments grouped per card with the user's supporters rank, claimed cards
-// with their board rank.
+// payments grouped per card with the user's supporters rank.
 
 type MeData = {
   email: string;
   profile: Profile | null;
   cards: PaymentsByCard[];
-  claims: ClaimedCard[];
 };
 
 export function ProfileClient() {
@@ -175,46 +173,6 @@ export function ProfileClient() {
                     {formatUsd(c.total)}
                   </span>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* ── My claims ── */}
-      <section>
-        <h2 className="mb-2 text-sm font-bold tracking-[-0.02em]">{t.myClaims}</h2>
-        {!data || data.claims.length === 0 ? (
-          <p className="rounded-2xl border bg-card px-4 py-6 text-center text-xs text-muted-foreground">
-            {t.noClaims}
-          </p>
-        ) : (
-          <ul className="overflow-hidden rounded-2xl border bg-card">
-            {data.claims.map((c) => (
-              <li key={c.listing.id} className="border-t first:border-t-0">
-                <Link
-                  href={`/#leaderboard`}
-                  className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/40"
-                >
-                  <span className="relative shrink-0">
-                    <Avatar
-                      name={c.listing.display_name}
-                      src={c.listing.image_url}
-                      className="size-9 text-xs ring-1 ring-black/5 dark:ring-white/10"
-                    />
-                    <span className="absolute -bottom-0.5 -end-0.5">
-                      <PlatformBadge platform={c.listing.platform} className="size-4" />
-                    </span>
-                  </span>
-                  <p dir="auto" className="min-w-0 flex-1 truncate text-xs font-bold">
-                    {c.listing.display_name}
-                  </p>
-                  {c.boardRank > 0 && (
-                    <span className="shrink-0 text-[11px] font-bold text-primary">
-                      {t.boardRank(c.boardRank)}
-                    </span>
-                  )}
-                </Link>
               </li>
             ))}
           </ul>

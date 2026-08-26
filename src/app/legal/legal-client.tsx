@@ -27,7 +27,7 @@ function ContactLink() {
 }
 
 export function LegalClient() {
-  const { t, lang } = useLang();
+  const { lang } = useLang();
   const ar = lang === "ar";
 
   const content = ar ? (
@@ -77,8 +77,7 @@ export function LegalClient() {
         بحسابك حتى تقدر تطالب بها لاحقاً وتظهر في قوائم الداعمين.
         <br />• قوائم الداعمين تعرض الاسم المعروض والمبالغ المدفوعة؛ يمكنك إخفاء
         نفسك من ملفك الشخصي فتظهر باسم «مجهول» مع بقاء المبلغ ظاهراً.
-        <br />• الملفات الشخصية العلنية تعرض البطاقات التي دعمتها والبطاقات
-        المطالب بها فقط.
+        <br />• الملفات الشخصية العلنية تعرض البطاقات التي دعمتها فقط.
         <br />• للحذف: راسلنا على <ContactLink /> وسيُحذف حسابك وارتباط بريدك
         بمدفوعاتك.
       </P>
@@ -138,8 +137,7 @@ export function LegalClient() {
         <br />• Supporters lists show display names and the amounts paid; you can
         go private from your profile and appear as "Anonymous" — the amount
         stays visible.
-        <br />• Public profiles show only the cards you supported and the cards
-        you claimed.
+        <br />• Public profiles show only the cards you supported.
         <br />• Deletion: contact us at {" "}<ContactLink /> and your account and
         the link between your email and your payments will be removed.
       </P>

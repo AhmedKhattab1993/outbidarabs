@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 // Public profile (spec flow 4): visible only for public users — private (or
 // missing) profiles 404 entirely. Resolved by the opaque public_id; auth
-// uuids simply don't match any public profile. Shows supported + owned cards.
+// uuids simply don't match any public profile. Shows supported cards.
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,7 +29,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   const cookieStore = await cookies();
   const lang: Lang = cookieStore.get("lang")?.value === "en" ? "en" : "ar";
   const t = getDict(lang);
-  const { profile, cards, claims } = data;
+  const { profile, cards } = data;
   const name = profile.display_name || "—";
   const joined = new Date(profile.created_at).toLocaleDateString(lang === "ar" ? "ar" : "en-US", {
     year: "numeric",
@@ -51,34 +51,6 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">{t.joinedAt(joined)}</p>
         </div>
-
-        {claims.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-2 text-sm font-bold tracking-[-0.02em]">{t.claimsSectionTitle}</h2>
-            <ul className="overflow-hidden rounded-2xl border bg-card">
-              {claims.map((c) => (
-                <li key={c.listing.id} className="border-t first:border-t-0">
-                  <div className="flex items-center gap-2.5 px-3 py-2.5">
-                    <span className="relative shrink-0">
-                      <Avatar name={c.listing.display_name} src={c.listing.image_url} className="size-9 text-xs ring-1 ring-black/5 dark:ring-white/10" />
-                      <span className="absolute -bottom-0.5 -end-0.5">
-                        <PlatformBadge platform={c.listing.platform} className="size-4" />
-                      </span>
-                    </span>
-                    <p dir="auto" className="min-w-0 flex-1 truncate text-xs font-bold">
-                      {c.listing.display_name}
-                    </p>
-                    {c.boardRank > 0 && (
-                      <span className="shrink-0 text-[11px] font-bold text-primary">
-                        {t.boardRank(c.boardRank)}
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
 
         <section className="mt-6">
           <h2 className="mb-2 text-sm font-bold tracking-[-0.02em]">{t.supportedCardsTitle}</h2>

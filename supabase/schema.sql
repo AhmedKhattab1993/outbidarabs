@@ -227,7 +227,8 @@ grant execute on function count_online() to service_role;
 grant execute on function listing_rank(uuid) to service_role;
 
 -- ═══════════════════════════════════════════════════════════
--- Accounts & claims (docs/accounts-workflow.md)
+-- Accounts (docs/accounts-workflow.md) — cards are agnostic: no claims /
+-- ownership (dropped in migrations/20250824000004_no_claims.sql)
 -- ═══════════════════════════════════════════════════════════
 
 -- ── Profiles (1:1 with auth.users, created on first login) ──
@@ -253,14 +254,7 @@ create index if not exists payments_listing_idx on payments (listing_id, amount 
 create index if not exists payments_user_idx on payments (user_id);
 create index if not exists payments_email_idx on payments (lower(payer_email));
 
--- ── Claims: exactly one owner per card (listing_id is the PK) ──
-create table if not exists claims (
-  listing_id uuid primary key references listings(id) on delete cascade,
-  user_id uuid not null references profiles(id),
-  status text not null default 'active',
-  created_at timestamptz not null default now()
-);
-create index if not exists claims_user_idx on claims (user_id);
+-- (No claims table: cards are agnostic — anyone pays, anyone boosts.)
 
 -- ── Public supporters surface ──
 -- payments itself stays locked (RLS enabled, no policies, revoked grants):
@@ -292,7 +286,6 @@ group by
 -- ── RLS ──
 alter table profiles enable row level security;
 alter table payments enable row level security;
-alter table claims enable row level security;
 
 drop policy if exists "profiles public or self read" on profiles;
 create policy "profiles public or self read" on profiles
@@ -304,8 +297,6 @@ drop policy if exists "profiles self update" on profiles;
 create policy "profiles self update" on profiles
   for update using (id = auth.uid());
 
-drop policy if exists "public read claims" on claims;
-create policy "public read claims" on claims for select using (true);
 -- payments: no anon/authenticated policies — service-role writes only
 -- (webhook + login backfill); public reads go through supporters_view.
 
@@ -383,18 +374,16 @@ revoke all on checkout_tokens from anon, authenticated;
 -- Lockdown (mirrors migrations/20250824000003_lockdown.sql)
 -- ───────────────────────────────────────────────────────
 
--- profiles/claims → service-role only: both carry auth uuids and the anon
--- key is public, so the "public read" policies exposed the uuid↔public_id
--- mapping and every owner's auth id. The app reads these tables only via
--- the service role (src/lib/accounts.ts); public surfaces use public_id.
--- The self-insert/self-update policies go too (no authenticated-direct
--- path exists). supporters_view keeps working (view-owner privileges).
+-- profiles → service-role only: profiles carries auth uuids and the anon
+-- key is public, so the "public read" policy exposed the uuid↔public_id
+-- mapping. The app reads the table only via the service role
+-- (src/lib/accounts.ts); public surfaces use public_id. The
+-- self-insert/self-update policies go too (no authenticated-direct path
+-- exists). supporters_view keeps working (view-owner privileges).
 drop policy if exists "profiles public or self read" on profiles;
 drop policy if exists "profiles self insert" on profiles;
 drop policy if exists "profiles self update" on profiles;
-drop policy if exists "public read claims" on claims;
 revoke select on profiles from anon, authenticated;
-revoke select on claims from anon, authenticated;
 
 -- Atomic OTP window/cooldown/increment (replaces the app's racy
 -- read→check→upsert). Returns
@@ -490,3 +479,10 @@ revoke execute on function consume_otp_allowance(text, integer, integer, integer
 revoke execute on function refund_otp_allowance(text) from public;
 grant execute on function consume_otp_allowance(text, integer, integer, integer) to service_role;
 grant execute on function refund_otp_allowance(text) to service_role;
+
+-- ───────────────────────────────────────────────────────
+-- No claims (mirrors migrations/20250824000004_no_claims.sql)
+-- ───────────────────────────────────────────────────────
+-- Cards are agnostic — no ownership. Drops the claims table if a previous
+-- paste created it (its policies/grants vanish with the table).
+drop table if exists claims;

@@ -24,11 +24,16 @@ export function ListingRow({
 }) {
   const { t, lang } = useLang();
   const [open, setOpen] = useState(false); // supporters drawer (D9)
-  // Any bid above the current holder takes the rank → claim price = bid + $1.
-  const claimPrice = listing.bid_amount + 1;
-  const claim = () =>
+  // Any bid above the current total takes the rank → boost price = bid + $1.
+  const boostPrice = listing.bid_amount + 1;
+  // Boost carries the card's identity (canonical URL) so the form opens on
+  // that exact card — preview, pay-the-difference state, supporter framing —
+  // one click from row to payment.
+  const boost = () =>
     window.dispatchEvent(
-      new CustomEvent("outbidarabs:claim", { detail: { amount: claimPrice } })
+      new CustomEvent("outbidarabs:boost", {
+        detail: { amount: boostPrice, url: listing.url },
+      })
     );
 
   return (
@@ -114,11 +119,11 @@ export function ListingRow({
             </p>
           </div>
         </a>
-        {/* Touch claim action: the hover pill below needs a pointer, so on
+        {/* Touch boost action: the hover pill below needs a pointer, so on
             touch screens this quiet inline row is the visible affordance. */}
         <button
           type="button"
-          onClick={claim}
+          onClick={boost}
           className="-mt-1 mb-1 flex min-h-10 w-fit cursor-pointer items-center gap-1 rounded-full ps-3 text-[11px] font-bold text-primary transition-colors hover:bg-primary/10 md:hidden"
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-3 shrink-0">
@@ -130,14 +135,14 @@ export function ListingRow({
               strokeLinejoin="round"
             />
           </svg>
-          {t.claimShort} {formatUsd(claimPrice)}
+          {t.claimShort} {formatUsd(boostPrice)}
         </button>
         <button
           type="button"
-          onClick={claim}
+          onClick={boost}
           className="pointer-events-none absolute left-1/2 z-20 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-primary-foreground shadow-sm transition-opacity duration-150 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
         >
-          {t.claimRankFor} {formatUsd(claimPrice)}
+          {t.claimRankFor} {formatUsd(boostPrice)}
         </button>
         {/* Supporters drawer toggle (D9): ranked payers per card. Lives outside
             the visit <a> so expanding never counts as a click-through. */}

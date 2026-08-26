@@ -64,6 +64,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   // client session must not auto-resume until the recheck settles.
   const refreshingSession = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
   const touched = useRef(false);
   const fetchSeq = useRef(0);
 
@@ -152,17 +153,25 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     setAmount(String(Math.min(MAX_BID, suggest)));
   }, [previewOk]);
 
-  // "claim this rank for $X" buttons on the board
+  // "boost this card for $X" buttons on the board: prefill the exact card
+  // (identity = its canonical URL, so platform auto-detects and the preview
+  // lands in the pay-the-difference state) plus the one-dollar-over price.
+  // The amount field keeps the focus — it's the one decision left.
   useEffect(() => {
-    const onClaim = (e: Event) => {
-      const detail = (e as CustomEvent<{ amount: number }>).detail;
+    const onBoost = (e: Event) => {
+      const detail = (e as CustomEvent<{ amount: number; url?: string }>).detail;
       touched.current = true;
       setAmount(String(detail.amount));
+      if (detail.url) {
+        setIdentity(detail.url);
+        setError(null);
+      }
       document.getElementById("claim")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      inputRef.current?.focus();
+      if (detail.url) amountRef.current?.focus();
+      else inputRef.current?.focus();
     };
-    window.addEventListener("outbidarabs:claim", onClaim);
-    return () => window.removeEventListener("outbidarabs:claim", onClaim);
+    window.addEventListener("outbidarabs:boost", onBoost);
+    return () => window.removeEventListener("outbidarabs:boost", onBoost);
   }, []);
 
   const clamp = useCallback((n: number) => Math.min(MAX_BID, Math.max(MIN_BID, n)), []);
@@ -519,6 +528,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
               </span>
               <span className="sr-only">{t.amountDollars}</span>
               <input
+                ref={amountRef}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"

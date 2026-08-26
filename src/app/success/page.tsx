@@ -98,51 +98,51 @@ function SuccessContent() {
         </svg>
       </div>
       <h1 className="mt-6 text-3xl font-bold tracking-[-0.03em]">
-        {ar ? "تم الدفع بنجاح!" : "Payment successful!"}
+        {ar ? "تم تأكيد المزايدة بنجاح! 🎉" : "Bid confirmed! 🎉"}
       </h1>
       {name ? (
         <p className="mt-3 leading-relaxed text-muted-foreground">
           {ar ? (
             <>
-              <span className="font-semibold text-foreground">{name}</span> على اللوحة الآن
+              تهانينا! أصبح <span className="font-semibold text-foreground">{name}</span> على لوحة الصدارة الآن
               {rank > 0 && (
                 <>
                   {" "}
                   في المركز <span className="font-semibold text-primary">#{rank}</span>
                 </>
               )}
-              {amount > 0 && <> بمبلغ {formatUsd(amount)}</>}
+              {amount > 0 && <> بمبلغ {formatUsd(amount)}</>}.
             </>
           ) : (
             <>
-              <span className="font-semibold text-foreground">{name}</span> is on the board
+              Congratulations! <span className="font-semibold text-foreground">{name}</span> is now live on the board
               {rank > 0 && (
                 <>
                   {" "}
                   at rank <span className="font-semibold text-primary">#{rank}</span>
                 </>
               )}
-              {amount > 0 && <> for {formatUsd(amount)}</>}
+              {amount > 0 && <> for {formatUsd(amount)}</>}.
             </>
           )}
         </p>
       ) : (
         <p className="mt-3 leading-relaxed text-muted-foreground">
           {ar
-            ? "طلبك بيتأكد حالياً… وهتظهر قائمتك على اللوحة خلال لحظات."
-            : "Confirming your order… your listing will appear on the board shortly."}
+            ? "جارٍ تأكيد طلبك… سيظهر حسابك على اللوحة خلال لحظات."
+            : "Confirming your payment… your profile will appear on the board shortly."}
         </p>
       )}
       {!isMock && !applied && name && (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground" role="status">
-          {ar ? "جارٍ تأكيد الدفع…" : "Confirming your payment…"}
+          {ar ? "جارٍ تسجيل المزايدة على اللوحة…" : "Recording your bid on the leaderboard…"}
         </p>
       )}
       <Link
         href="/#leaderboard"
         className="mt-8 inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/80"
       >
-        {ar ? "اذهب إلى اللوحة" : "Go to the board"}
+        {ar ? "مشاهدة الترتيب على اللوحة ←" : "View your rank on the board →"}
       </Link>
     </div>
   );

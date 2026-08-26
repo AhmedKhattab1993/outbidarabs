@@ -5,7 +5,7 @@ import { ProfileClient } from "./profile-client";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "outbidarabs.lol — ملفي · My profile" };
+export const metadata = { title: "outbidarabs.lol — حسابي · My profile" };
 
 export default function ProfilePage() {
   return (

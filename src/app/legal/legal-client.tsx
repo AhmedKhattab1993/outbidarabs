@@ -34,14 +34,14 @@ export function LegalClient() {
     <>
       <H2>١. وصف الخدمة</H2>
       <P>
-        outbidarabs.lol موقع إلكتروني يعرض لوحة ترتيب علنية. مقابل الدفعة الواحدة، يظهر
-        إدراجك (حساب تواصل اجتماعي، موقع، أو تطبيق) على اللوحة فوراً. الترتيب يتحدد
+        outbidarabs.lol منصة إلكترونية تعرض لوحة صدارة علنية ومباشرة. مقابل دفعة واحدة، يظهر
+        حسابك أو مشروعك (حساب تواصل اجتماعي، موقع إلكتروني، أو تطبيق) على اللوحة فوراً. يتحدد الترتيب
         بإجمالي المبلغ المدفوع فقط، وأي مزايدة أعلى من مستخدم آخر تنقل المركز إليه.
-        لا اشتراكات ولا تجديد تلقائي ولا رسوم متكررة.
+        لا اشتراكات، ولا تجديد تلقائي، ولا رسوم متكررة خفية.
       </P>
       <H2>٢. التزامات المشتري</H2>
       <P>
-        بإتمام الدفع، تقرّ أنك مالك الحساب أو الرابط المدرَج أو مفوَّض بالإعلان عنه، وأن
+        بإتمام الدفع، تقرّ بأنك مالك الحساب أو الرابط المدرَج أو مفوَّض بالإعلان عنه، وأن
         المحتوى لا يخالف قواعد اللوحة المنشورة في{" "}
         <a className="text-primary hover:underline" href="/rules">
           صفحة القواعد
@@ -50,49 +50,44 @@ export function LegalClient() {
       </P>
       <H2>٣. سياسة الاسترداد</H2>
       <P>
-        • إذا لم يُطبَّق إدراجك بعد خصم المبلغ (خطأ تقني أو ازدواج)، يُسترد كامل المبلغ —
-        راسلنا على <ContactLink /> وسنعيده فوراً.
-        <br />• المنفعة تُستهلك فور النشر: القائمة تظهر علنيةً في لحظة تأكيد الدفع، لذا لا
-        يوجد استرداد بعد النشر بسبب تغيّر الرتبة أو تجاوز مزايدة أعلى — هذه طبيعة اللوحة
-        العلنية المعلنة قبل الدفع.
-        <br />• الإدراجات المخالفة للقواعد تُزال دون استرداد.
-        <br />• للحالات الاستثنائية راسلنا على <ContactLink /> وسنراجع الطلب
-        بشكل فردي.
+        • إذا لم يظهر حسابك على اللوحة بعد خصم المبلغ بسبب خلل تقني أو تكرار بالخطأ، يُسترد كامل المبلغ فوراً —
+        راسلنا على <ContactLink /> وسنعيده إليك بدون تأخير.
+        <br />• المنفعة متحققة وفورية: يظهر الحساب علنياً في لحظة تأكيد الدفع مباشرة. لذا لا
+        يوجد استرداد بعد النشر بسبب تغيّر الترتيب أو تجاوزه بمزايدة أعلى — فهذه طبيعة المنافسة المفتوحة المعلنة قبل الدفع.
+        <br />• الإدراجات المخالفة للقواعد والآداب العامة تُزال دون استرداد.
+        <br />• للحالات الاستثنائية، يرجى مراسلتنا على <ContactLink /> وسنراجع الطلب بعناية.
       </P>
       <H2>٤. مدة العرض</H2>
       <P>
-        يبقى الإدراج على اللوحة حتى يتجاوزه عرض أعلى. لا نضمن مدة بقاء مركز معين — العرض
-        علني والمنافسة مفتوحة، وهذا معلن بوضوح قبل الدفع.
+        يبقى الحساب معروضاً على اللوحة طالما بقي ضمن المراتب النشطة، حتى يتجاوزه عرض أعلى. لا نضمن بقاء مركز معين لمدة محددة؛ فالمنافسة مفتوحة ومباشرة للجميع.
       </P>
       <H2>٥. إشراف المحتوى</H2>
       <P>
-        تُفحص كل الطلبات تلقائياً (محتوى غير قانوني/إباحي، روابط دردشة ودعوات، اختصارات
-        روابط، معاملات تتبع) ويحق للإدارة إزالة أي إدراج مخالف.
+        تُفحص جميع الروابط تلقائياً (ضد المحتوى الإباحي، غير القانوني، روابط الدعوات، واختصارات
+        الروابط)، ويحق لإدارة المنصة إزالة أي إدراج مخالف دون إشعار مسبق.
       </P>
       <H2>٦. الحسابات والخصوصية</H2>
       <P>
-        • لإتمام الدفع يلزم تسجيل دخول بالبريد: حسابك هو بريدك ورمز تحقق من ستة
-        أرقام يُرسل إليه — لا كلمات مرور ولا بيانات دخول أخرى. التصفح والمتابعة
-        متاحان بدون حساب.
-        <br />• نخزّن بريد الدافع لغرض واحد: ربط مدفوعاتك بحسابك حتى تظهر في
-        ملفك وفي قوائم الداعمين.
-        <br />• قوائم الداعمين تعرض الاسم المعروض والمبالغ المدفوعة؛ يمكنك إخفاء
-        نفسك من ملفك الشخصي فتظهر باسم «مجهول» مع بقاء المبلغ ظاهراً.
-        <br />• الملفات الشخصية العلنية تعرض البطاقات التي دعمتها فقط.
-        <br />• للحذف: راسلنا على <ContactLink /> وسيُحذف حسابك وارتباط بريدك
-        بمدفوعاتك.
+        • لإتمام الدفع يلزم تسجيل دخول سريع بالبريد: حسابك هو بريدك ورمز تحقق من ستة
+        أرقام يُرسل إليه — لا كلمات مرور ولا بيانات معقدة. التصفح متاح للجميع دون حساب.
+        <br />• نخزّن بريد الدافع لغرض واحد فقط: ربط المزايدات بملفك الشخصي وظهور اسمك
+        في قوائم الداعمين.
+        <br />• تعرض قوائم الداعمين الاسم المعروض والمبالغ المدفوعة؛ يمكنك تفعيل الوضع الخاص
+        من ملفك الشخصي لتظهر دائماً باسم «مجهول» مع بقاء المبلغ ظاهراً.
+        <br />• تعرض الملفات الشخصية العامة الحسابات التي دعمتها فقط.
+        <br />• لطلب حذف البيانات والحساب: راسلنا على <ContactLink /> وسيتم حذف الحساب وارتباط البريد نهائياً.
       </P>
       <H2>٧. التعديلات</H2>
-      <P>نحتفظ بحق تحديث هذه الشروط، ويسري التحديث من نشره على هذه الصفحة.</P>
+      <P>نحتفظ بحق تحديث هذه الشروط، وتسري التحديثات فور نشرها على هذه الصفحة.</P>
     </>
   ) : (
     <>
       <H2>1. The service</H2>
       <P>
-        outbidarabs.lol operates a public leaderboard. In exchange for a one-time payment,
-        your listing (a social account, website, or app) appears on the board instantly.
-        Rank is determined solely by the total amount paid; any higher bid from another
-        user takes the position. No subscriptions, auto-renewals, or recurring fees.
+        outbidarabs.lol operates a public, real-time leaderboard. In exchange for a one-time payment,
+        your profile or link (social account, website, or app) appears on the board instantly.
+        Rank is determined solely by the total amount paid; any higher bid takes the lead.
+        No subscriptions, auto-renewals, or hidden recurring fees.
       </P>
       <H2>2. Buyer obligations</H2>
       <P>
@@ -105,22 +100,20 @@ export function LegalClient() {
       </P>
       <H2>3. Refund policy</H2>
       <P>
-        • If your listing fails to apply after payment was captured (technical failure or
+        • If your listing fails to apply after payment was captured (technical glitch or
         duplicate charge), the full amount is refunded — contact us at <ContactLink /> and
         we will return it promptly.
-        <br />• Fulfillment is instant and consumed on publication: the listing goes public
+        <br />• Fulfillment is instant and consumed on publication: the listing goes live
         the moment payment is confirmed. Because of that, rank changes or being outbid are
-        not refundable — this is the publicly stated nature of the board, disclosed before
-        payment.
-        <br />• Listings that violate the rules are removed without refund.
+        non-refundable — this is the transparent, real-time nature of the open leaderboard.
+        <br />• Listings that violate our rules are removed without refund.
         <br />• Exceptional cases are reviewed individually — contact us at
         {" "}<ContactLink />.
       </P>
       <H2>4. Display duration</H2>
       <P>
         A listing stays on the board until a higher bid takes its position. We do not
-        guarantee any minimum time at any rank — the board is public and open, and this is
-        clearly disclosed before payment.
+        guarantee any minimum time at any specific rank — the board is public, dynamic, and open.
       </P>
       <H2>5. Content moderation</H2>
       <P>
@@ -131,17 +124,16 @@ export function LegalClient() {
       <H2>6. Accounts & privacy</H2>
       <P>
         • Completing a payment requires an email-code login: your account is
-        your email plus a 6-digit verification code sent to it — no passwords
-        or other credentials. Browsing stays account-free.
+        your email plus a 6-digit verification code sent to it — no passwords. Browsing stays account-free.
         <br />• We store the payer email for one purpose: attributing your
         payments to your account so they appear in your profile and in
         supporters lists.
         <br />• Supporters lists show display names and the amounts paid; you can
-        go private from your profile and appear as "Anonymous" — the amount
+        switch to private in your profile to appear as "Anonymous" — the amount
         stays visible.
-        <br />• Public profiles show only the cards you supported.
+        <br />• Public profiles show only the accounts you supported.
         <br />• Deletion: contact us at {" "}<ContactLink /> and your account and
-        the link between your email and your payments will be removed.
+        the link between your email and payments will be permanently removed.
       </P>
       <H2>7. Changes</H2>
       <P>

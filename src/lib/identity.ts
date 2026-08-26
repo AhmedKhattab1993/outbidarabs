@@ -310,40 +310,46 @@ function moderateText(s: string): string | null {
 
 export function identityErrorMessages(reason: string, lang: "ar" | "en"): string {
   const msgs: Record<string, { ar: string; en: string }> = {
-    empty: { ar: "أدخل حساباً أو رابطاً", en: "Enter a handle or URL" },
-    invalid: { ar: "رابط غير صالح", en: "Invalid URL" },
+    empty: { ar: "يرجى إدخال اسم المستخدم أو الرابط", en: "Please enter a username or URL" },
+    invalid: { ar: "الرابط المدخل غير صالح", en: "Please enter a valid URL" },
     ambiguous: {
-      ar: "اختر المنصة: إنستجرام، تيك توك، أو إكس",
-      en: "Pick the platform: Instagram, TikTok, or X",
+      ar: "يرجى تحديد المنصة: إنستغرام، تيك توك، أو إكس",
+      en: "Please select the platform: Instagram, TikTok, or X",
     },
     "post-not-profile": {
-      ar: "أدخل رابط الحساب نفسه، لا رابط منشور",
-      en: "Enter the profile link, not a post link",
+      ar: "يرجى إدخال رابط الملف الشخصي/الحساب، وليس رابط منشور منفصل",
+      en: "Please enter a profile link, not a post link",
     },
     "linkedin-profile": {
-      ar: "أدخل رابط ملف شخصي بصيغة linkedin.com/in/…",
-      en: "Enter a profile URL like linkedin.com/in/…",
+      ar: "يرجى إدخال رابط ملف شخصي بصيغة linkedin.com/in/username",
+      en: "Enter a profile URL like linkedin.com/in/username",
     },
     "store-app": {
-      ar: "أدخل رابط تطبيق من App Store أو Google Play",
-      en: "Enter an App Store or Google Play URL",
+      ar: "يرجى إدخال رابط تطبيق صالح من App Store أو Google Play",
+      en: "Enter a valid App Store or Google Play URL",
     },
     "tiktok-short": {
-      ar: "روابط تيك توك المختصرة غير مدعومة — أدخل رابط الحساب الكامل",
+      ar: "الروابط المختصرة لتيك توك غير مدعومة — يرجى إدخال رابط الحساب الكامل",
       en: "Short TikTok links aren't supported — enter the full profile URL",
     },
     "forbidden-chat": {
-      ar: "روابط المجموعات والدعوات ممنوعة (تيليجرام، واتساب، ديسكورد…)",
-      en: "Chat and invite links are not allowed (Telegram, WhatsApp, Discord…)",
+      ar: "روابط المجموعات والمحادثات الخاصة غير مسموحة (واتساب، تيليجرام، ديسكورد وغيرها)",
+      en: "Group and chat invite links are not allowed (WhatsApp, Telegram, Discord, etc.)",
     },
-    shortener: { ar: "الروابط المختصرة ممنوعة", en: "Link shorteners are not allowed" },
-    nsfw: { ar: "المحتوى الإباحي ممنوع", en: "Adult content is not allowed" },
+    shortener: {
+      ar: "الروابط المختصرة غير مسموحة لضمان الشفافية والأمان",
+      en: "Link shorteners are not allowed for transparency and security",
+    },
+    nsfw: {
+      ar: "المحتوى الإباحي أو المخصص للبالغين غير مسموح به إطلاقاً",
+      en: "Adult content is strictly not allowed",
+    },
     illegal: {
-      ar: "المحتوى غير القانوني ممنوع (مخدرات، قمار، أسلحة، احتيال…)",
-      en: "Illegal content is not allowed (drugs, gambling, weapons, fraud…)",
+      ar: "المحتوى والأنشطة غير القانونية محظورة بالكامل (مخدرات، قمار، أسلحة، احتيال)",
+      en: "Illegal content and activities are strictly prohibited (drugs, gambling, weapons, fraud)",
     },
-    "too-low": { ar: "الحد الأدنى $1", en: "Minimum bid is $1" },
-    "over-max": { ar: "الحد الأقصى $999,999", en: "Maximum bid is $999,999" },
+    "too-low": { ar: "الحد الأدنى للمزايدة هو $1", en: "Minimum bid is $1" },
+    "over-max": { ar: "الحد الأقصى للمزايدة هو $999,999", en: "Maximum bid is $999,999" },
   };
   return (msgs[reason] ?? msgs.invalid)[lang];
 }

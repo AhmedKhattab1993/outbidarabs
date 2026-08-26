@@ -53,9 +53,9 @@ EXPECT_SIDE_CARDS="${EXPECT_SIDE_CARDS:-0}"
 echo "1) Home page"
 HTML=$(curl -sL --max-time 20 "$BASE/" || echo "")
 check "home page returns HTML" $([ -n "$HTML" ] && echo 0 || echo 1)
-check "platform headline present" $(echo "$HTML" | grep -qE "رتب حسابك على إنستجرام أو تيك توك|Rank your Instagram or TikTok" && echo 0 || echo 1)
+check "platform headline present" $(echo "$HTML" | grep -qE "تصدّر اللوحة بحسابك على|رتب حسابك على إنستجرام|Rank your Instagram" && echo 0 || echo 1)
 check "platform filter pills present" $(echo "$HTML" | grep -qE "إنستجرام|Instagram" && echo 0 || echo 1)
-check "earnings card present" $(echo "$HTML" | grep -qE "العرب للـ Outbid|Arab outbid board" && echo 0 || echo 1)
+check "earnings card present" $(echo "$HTML" | grep -qE "لوحة الصدارة العربية|العرب للـ Outbid|Arab Leaderboard|Arab outbid board" && echo 0 || echo 1)
 check "no 'no ads' copy anywhere" $(echo "$HTML" | grep -qiE 'no ads|لا إعلانات' && echo 1 || echo 0)
 if [ "$EXPECT_SIDE_CARDS" = "1" ]; then
   check "trending/activity cards present" $(echo "$HTML" | grep -qE "الأكثر رواجاً الآن|Trending right now" && echo 0 || echo 1)

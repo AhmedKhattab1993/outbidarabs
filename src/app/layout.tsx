@@ -23,13 +23,13 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "outbidarabs.lol — رتب حسابك على إنستجرام أو تيك توك",
+  title: "outbidarabs.lol — تصدّر اللوحة على إنستغرام وتيك توك · Claim the #1 Spot",
   description:
-    "لوحة الترتيب العربية: أعلى مزايدة = المركز الأول. إنستجرام وتيك توك أولاً، ومدعوم أيضاً: إكس ولينكدإن والمواقع والتطبيقات. The Arab pay-to-rank board.",
+    "لوحة الترتيب المباشرة في العالم العربي: أعلى مزايدة = المركز الأول. أضف حسابك، ادعم صانعك المفضل، وتصدّر المشهد. The live pay-to-rank leaderboard for creators and brands.",
   openGraph: {
-    title: "outbidarabs.lol",
+    title: "outbidarabs.lol — The Arab Pay-to-Rank Leaderboard",
     description:
-      "Highest bid = #1. Rank your Instagram or TikTok — X, LinkedIn, websites and apps supported too. The Arab-world pay-to-rank leaderboard.",
+      "Highest bid = #1 spot. Rank your Instagram, TikTok, X, or website — or back your favorite creator to reach #1. Live across the Arab world.",
     type: "website",
   },
 };

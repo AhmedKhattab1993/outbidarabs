@@ -23,7 +23,7 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
-  title: "outbidarabs.lol — تصدّر اللوحة على إنستغرام وتيك توك · Claim the #1 Spot",
+  title: "outbidarabs.lol — تصدّر اللوحة على إنستجرام وتيك توك · Claim the #1 Spot",
   description:
     "لوحة الترتيب المباشرة في العالم العربي: أعلى مزايدة = المركز الأول. أضف حسابك، ادعم صانعك المفضل، وتصدّر المشهد. The live pay-to-rank leaderboard for creators and brands.",
   openGraph: {

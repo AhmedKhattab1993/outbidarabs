@@ -24,7 +24,7 @@ export function isPlatformFilter(v: string | null | undefined): v is PlatformFil
 }
 
 export const PLATFORM_LABELS: Record<Platform, { ar: string; en: string }> = {
-  instagram: { ar: "إنستغرام", en: "Instagram" },
+  instagram: { ar: "إنستجرام", en: "Instagram" },
   tiktok: { ar: "تيك توك", en: "TikTok" },
   x: { ar: "إكس", en: "X" },
   linkedin: { ar: "لينكدإن", en: "LinkedIn" },

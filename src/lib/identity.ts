@@ -313,7 +313,7 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
     empty: { ar: "يرجى إدخال اسم المستخدم أو الرابط", en: "Please enter a username or URL" },
     invalid: { ar: "الرابط المدخل غير صالح", en: "Please enter a valid URL" },
     ambiguous: {
-      ar: "يرجى تحديد المنصة: إنستغرام، تيك توك، أو إكس",
+      ar: "يرجى تحديد المنصة: إنستجرام، تيك توك، أو إكس",
       en: "Please select the platform: Instagram, TikTok, or X",
     },
     "post-not-profile": {

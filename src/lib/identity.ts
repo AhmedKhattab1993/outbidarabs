@@ -317,7 +317,7 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
       en: "Pick the platform: Instagram, TikTok, or X",
     },
     "post-not-profile": {
-      ar: "أدخل رابط الحساب نفسه، مش رابط منشور",
+      ar: "أدخل رابط الحساب نفسه، لا رابط منشور",
       en: "Enter the profile link, not a post link",
     },
     "linkedin-profile": {
@@ -336,8 +336,8 @@ export function identityErrorMessages(reason: string, lang: "ar" | "en"): string
       ar: "روابط المجموعات والدعوات ممنوعة (تيليجرام، واتساب، ديسكورد…)",
       en: "Chat and invite links are not allowed (Telegram, WhatsApp, Discord…)",
     },
-    shortener: { ar: "روابط التقصير ممنوعة", en: "Link shorteners are not allowed" },
-    nsfw: { ar: "المحتوى للبالغين ممنوع", en: "Adult content is not allowed" },
+    shortener: { ar: "الروابط المختصرة ممنوعة", en: "Link shorteners are not allowed" },
+    nsfw: { ar: "المحتوى الإباحي ممنوع", en: "Adult content is not allowed" },
     illegal: {
       ar: "المحتوى غير القانوني ممنوع (مخدرات، قمار، أسلحة، احتيال…)",
       en: "Illegal content is not allowed (drugs, gambling, weapons, fraud…)",

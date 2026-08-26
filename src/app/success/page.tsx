@@ -111,7 +111,7 @@ function SuccessContent() {
                   في المركز <span className="font-semibold text-primary">#{rank}</span>
                 </>
               )}
-              {amount > 0 && <> بسعر {formatUsd(amount)}</>}
+              {amount > 0 && <> بمبلغ {formatUsd(amount)}</>}
             </>
           ) : (
             <>
@@ -129,7 +129,7 @@ function SuccessContent() {
       ) : (
         <p className="mt-3 leading-relaxed text-muted-foreground">
           {ar
-            ? "جارٍ تأكيد طلبك… سيظهر إدراجك على اللوحة خلال لحظات."
+            ? "طلبك بيتأكد حالياً… وهتظهر قائمتك على اللوحة خلال لحظات."
             : "Confirming your order… your listing will appear on the board shortly."}
         </p>
       )}

@@ -37,9 +37,9 @@ export function RulesClient() {
 
           <H2>{t.rulesRankingTitle}</H2>
           <P>
-            {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> ({t.rulesRankingMin} —{" "}
-            <Code>$999,999</Code> {t.rulesRankingMax}). {t.rulesRankingTime}
+            {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> – <Code>$999,999</Code>.
           </P>
+          <P>{t.rulesRankingTime}</P>
           <P>{t.rulesRanking2}</P>
 
           <H2>{t.rulesPlatformsTitle}</H2>

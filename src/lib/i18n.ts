@@ -17,7 +17,7 @@ export const dict = {
     headline: "رتب حسابك على إنستجرام أو تيك توك",
     headlineTagline: "أعلى عرض = المركز الأول",
     supporting:
-      "أي حد يقدر يضيف بطاقة — صاحبها أو من جمهورها. وأي حد يقدر يدفع عشان يرفعها أعلى. إنستجرام وتيك توك أولاً — المواقع والتطبيقات مدعومة كمان.",
+      "أي حد يقدر يضيف قائمة — سواء صاحبها أو من جمهورها، وأي حد يقدر يدفع عشان يرفعها أعلى. إنستجرام وتيك توك أولاً، والمواقع والتطبيقات مدعومة كمان.",
     inputPlaceholder: {
       instagram: "@username أو instagram.com/username",
       tiktok: "@username أو tiktok.com/@username",
@@ -26,46 +26,47 @@ export const dict = {
       website: "example.com",
       app: "رابط App Store أو Google Play",
     },
-    startsFrom: "البدايات من",
+    startsFrom: "يبدأ من",
     outbid: "زايد",
     reserveSpot: "ضيفها للوحة",
     amountDollars: "المبلغ بالدولار",
-    decreaseBid: "أنقص دولاراً",
-    increaseBid: "زد دولاراً",
+    decreaseBid: "اطرح دولارًا",
+    increaseBid: "زد دولارًا",
     takesRank: (n: number) => `ياخد المركز #${n}`,
     moreForRank: (amount: number, n: number) => `+${usd(amount)} للمركز #${n}`,
     firstOnBoard: "هتبقى المركز #1 — أول قائمة على اللوحة 🥇",
     raiseAboveCurrent: (bid: number) =>
-      `البطاقة دي عند ${usd(bid)} — اكتب مبلغ أعلى عشان ترفعها (بتدفع الفرق بس)`,
+      `القائمة دي موجودة عند ${usd(bid)} — اكتب مبلغ أعلى عشان ترفعها (بتدفع الفرق بس)`,
     takeRankFor: (n: number, price: number) => `خد المركز #${n} مقابل ${usd(price)}`,
     payMore: (n: number) => `ارفعها بـ ${usd(n)}`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
-      `البطاقة على اللوحة عند ${usd(bid)} — ادفع فرق ${usd(diff)} بس وارفعها، وتظهر ضمن داعميها.`,
-    onBoardNoDiff: (bid: number) => `البطاقة على اللوحة عند ${usd(bid)} — اكتب المبلغ اللي هتضيفه وارفعها`,
+      `القائمة على اللوحة عند ${usd(bid)} — ادفع فرق ${usd(diff)} بس وارفعها، وهيظهر اسمك ضمن الداعمين.`,
+    onBoardNoDiff: (bid: number) => `القائمة على اللوحة عند ${usd(bid)} — اكتب المبلغ اللي هتضيفه وارفعها`,
     alreadyOnList:
-      "عايز ترفع بطاقة موجودة؟ الصق نفس الحساب أو الرابط — بتدفع الفرق بس وتظهر ضمن الداعمين.",
+      "عايز ترفع قائمة موجودة؟ الصق نفس الحساب أو الرابط — بتدفع الفرق بس واسمك هيظهر ضمن الداعمين.",
     // ── Platform filter ──
     filterAll: "الكل",
     boardEmpty: "اللوحة لسه فاضية.",
-    boardEmptyCta: "كن أول واحد يرتب حساب إنستجرام أو تيك توك.",
-    platformEmpty: (p: Platform) => `مفيش قوائم ${platformLabel(p, "ar")} لسه — كن أول واحد.`,
+    boardEmptyCta: "كن أول واحد يضيف حساب إنستجرام أو تيك توك.",
+    platformEmpty: (p: Platform) => `لسه مفيش قوائم ${platformLabel(p, "ar")} — خليك إنت الأول.`,
     // ── Preview card ──
-    platformAutoFromLink: "المنصة تتحدد تلقائياً من الرابط",
+    platformAutoFromLink: "بنحدد المنصة أوتوماتيك من الرابط",
     handleMismatch: (p: Platform) =>
-      `المعرّف ده لا يناسب ${platformLabel(p, "ar")} — تأكد منه أو الصق الرابط الكامل`,
-    needsUrl: (p: Platform) => `عشان ${platformLabel(p, "ar")} الصق الرابط الكامل`,
-    previewSourceNote: "البيانات تُجلب تلقائيًا من المنصة نفسها — للعرض فقط.",
-    fetchFailedNote: "ما قدرناش نجيب بيانات الحساب الآن — هنعرض المعرّف الأساسي.",
+      `المعرّف ده مش مناسب لـ ${platformLabel(p, "ar")} — اتأكد منه أو الصق الرابط الكامل`,
+    needsUrl: (p: Platform) => `إضافة قوائم ${platformLabel(p, "ar")} لازم تكون بالرابط الكامل`,
+    previewSourceNote: "البيانات دي جاية من المنصة نفسها — للعرض بس.",
+    fetchFailedNote: "ما قدرناش نجيب بيانات الحساب دلوقتي — هنعرض المعرّف بس.",
     // ── Board rows ──
     trending: "الأكثر رواجاً الآن",
     clicksPerHour: "نقرة/س",
-    latestActivity: "آخر النشاطات",
+    latestActivity: "آخر نشاط",
     at: "في",
     minutesAgo: (n: number) =>
       n === 1 ? "منذ دقيقة" : n === 2 ? "منذ دقيقتين" : n <= 10 ? `منذ ${n} دقائق` : `منذ ${n} دقيقة`,
     hoursAgo: (n: number) =>
       n === 1 ? "منذ ساعة" : n === 2 ? "منذ ساعتين" : n <= 10 ? `منذ ${n} ساعات` : `منذ ${n} ساعة`,
-    daysAgo: (n: number) => (n === 1 ? "منذ يوم" : n === 2 ? "منذ يومين" : `منذ ${n} أيام`),
+    daysAgo: (n: number) =>
+      n === 1 ? "منذ يوم" : n === 2 ? "منذ يومين" : n <= 10 ? `منذ ${n} أيام` : `منذ ${n} يوم`,
     justNow: "الآن",
     clicks: (n: string) => `${n} نقرة`,
     claimRankFor: "ارفعها ↑ مقابل",
@@ -76,43 +77,41 @@ export const dict = {
     refresh: "تحديث",
     // ── Earnings card ──
     earningsPrefix: "لوحة",
-    earningsHighlight: "العرب للـ Outbid",
-    earningsSuffix: "جنّت",
-    sinceItsLaunch: "منذ إطلاقه",
+    earningsHighlight: "العرب",
+    earningsSuffix: "حققت",
+    sinceFromLaunch: (d: string) => `منذ ${d} من إطلاقه`,
     launchedOnDate: "21 أغسطس 2026",
-    launchedOnSentence: (d: string) => `أُطلق الموقع في ${d}.`,
-    crazyThings: "أبرز الأرقام منذ الإطلاق:",
-    highestBidSoFar: "أعلى مزايدة (حتى الآن)",
+    launchedOnSentence: (d: string) => `انطلق الموقع في ${d}.`,
+    crazyThings: "أبرز الأرقام منذ الانطلاق:",
+    highestBidSoFar: "أعلى مزايدة حتى الآن",
     listingsOnBoard: (n: number) => `${n.toLocaleString("en-US")} قائمة على اللوحة`,
     totalPaidSoFar: (s: string) => `إجمالي المدفوعات ${s}`,
     // ── Rules page ──
     rulesTitle: "القواعد",
     rulesIntro:
-      "OutbidArabs لوحة ترتيب علنية للعرب. الترتيب هو السعر — لا شيء غير ذلك. لا مفاتيح API ولا مشاركة أرباح.",
+      "OutbidArabs لوحة ترتيب علنية موجهة للعالم العربي. الترتيب هو المزايدة نفسها — ولا شيء غير ذلك. لا مفاتيح API ولا مشاركة في الأرباح.",
     rulesRankingTitle: "كيف يعمل الترتيب",
     rulesRanking1:
-      "الترتيب يتحدد بإجمالي مبلغ المزايدة فقط — أعلى مزايدة إجمالية تأخذ المركز الأول. القوائم الجديدة تبدأ من",
-    rulesRankingMin: "الحد الأدنى",
-    rulesRankingMax: "الحد الأقصى",
-    rulesRankingTime: "بالمزايدة المتساوية، العرض الأقدم يحتفظ بالمركز الأعلى.",
+      "الترتيب يتحدد بإجمالي مبلغ المزايدة فقط — أعلى مزايدة تأخذ المركز الأول. القوائم الجديدة تبدأ من",
+    rulesRankingTime: "وعند تساوي المبالغ، تحتفظ المزايدة الأقدم بالمركز الأعلى.",
     rulesRanking2:
-      "أي حد يقدر يرفع أي قائمة موجودة — مش بس اللي ضافها. أدخل نفس الحساب أو الرابط وزايد بأي مبلغ أعلى من المبلغ الحالي: بتدفع الفرق بس، مش المبلغ كله، وتظهر ضمن داعمي القائمة.",
+      "يمكن لأي شخص رفع أي قائمة حالية — وليس مالكها وحده. أدخل الحساب أو الرابط نفسه وزايد بأي مبلغ يتجاوز المبلغ الحالي: تدفع الفرق فقط لا المبلغ كاملاً، ويظهر اسمك ضمن داعمي القائمة.",
     rulesPlatformsTitle: "المنصات المدعومة",
     rulesPlatformsBody:
-      "إنستجرام وتيك توك أولاً — حسابات التواصل الاجتماعي هي محور اللوحة. كمان مدعوم: إكس، لينكدإن، المواقع، والتطبيقات (App Store / Google Play). كل قائمة تحمل أيقونة منصتها على اللوحة.",
+      "إنستجرام وتيك توك أولاً — حسابات التواصل الاجتماعي هي جوهر اللوحة. ندعم أيضاً: إكس، ولينكدإن، والمواقع، والتطبيقات (App Store / Google Play). كل قائمة تحمل أيقونة منصتها على اللوحة.",
     rulesCanTitle: "الممنوعات",
     rulesCan1:
-      "روابط الدعوات والمجموعات ممنوعة — واتساب، تيليجرام، ديسكورد، ماسنجر، سيجنال وما شابه. اللوحة للحسابات والمنتجات، مش مجموعات الدردشة.",
+      "روابط الدعوات ومجموعات الدردشة ممنوعة — واتساب، وتيليجرام، وديسكورد، وماسنجر، وسيجنال وما شابه. اللوحة للحسابات والمنتجات، لا لمجموعات الدردشة.",
     rulesCan2:
-      "المحتوى الإباحي وغير القانوني ممنوع — مخدرات، قمار ومراهنات، أسلحة، تزوير، احتيال أو حسابات مسروقة: لا مكان لها على اللوحة.",
+      "المحتوى الإباحي وغير القانوني ممنوع — إباحية، ومخدرات، وقمار ومراهنات، وأسلحة، وتزوير، واحتيال، أو حسابات مسروقة: ليس لها مكان على اللوحة.",
     rulesCan3:
-      "روابط التقصير ممنوعة، ومعاملات التتبع تُحذف من الروابط تلقائياً — روابط الإحالة والتتبع مش هتشتغل.",
+      "الروابط المختصرة ممنوعة، وتُحذف معاملات التتبع من الروابط تلقائياً — روابط الإحالة والتتبع لن تعمل.",
     rulesAfterTitle: "بعد الدفع",
     rulesAfter1:
-      "قائمتك تظهر علنية فوراً. النقرات تذهب إلى الرابط الأصلي لحسابك أو منتجك.",
-    rulesAfter2: "الدفع المكتمل هو الذي يحجز المركز.",
+      "تظهر قائمتك للعامة فوراً، وتذهب النقرات إلى الرابط الأصلي لحسابك أو منتجك.",
+    rulesAfter2: "الدفع المكتمل هو ما يحجز المركز.",
     rulesOriginNote:
-      "الفكرة مستوحاة من outbid.lol. النسخة دي مخصصة للعرب ومركزة على حسابات التواصل الاجتماعي.",
+      "الفكرة مستوحاة من outbid.lol، وهذه النسخة مخصصة للعالم العربي ومركزة على حسابات التواصل الاجتماعي.",
     // ── About ──
     aboutTitle: "عن المنصة",
     footerRules: "القواعد",
@@ -122,33 +121,40 @@ export const dict = {
     // ── Accounts / auth ──
     navProfile: "ملفي",
     login: "دخول",
-    loginTitle: "الدخول بالبريد",
-    loginIntro: "هنرسل رمز من 6 أرقام على بريدك — بدون كلمة سر.",
+    loginTitle: "سجّل دخولك بالإيميل",
+    loginIntro: "هنرسلك رمز من 6 أرقام على إيميلك — من غير كلمة سر.",
     emailLabel: "البريد الإلكتروني",
     sendCode: "أرسل الرمز",
-    codeSentTo: (email: string) => `أرسلنا رمزاً إلى ${email}`,
+    codeSentTo: (email: string) => `بعتنا رمز التحقق على ${email}`,
     codeLabel: "رمز التحقق",
     verify: "تأكيد",
-    resendIn: (s: number) => `إعادة الإرسال بعد ${s}ث`,
+    resendIn: (s: number) => `إعادة الإرسال بعد ${s} ثانية`,
     resend: "إعادة الإرسال",
     back: "رجوع",
-    invalidEmail: "بريد غير صالح",
-    invalidCode: "الرمز غير صحيح أو منتهي",
-    tooManyCodes: "رسائل كتيرة — جرّب بعد ساعة",
-    cooldownSoon: (s: number) => `استنى ${s} ثانية قبل إعادة الإرسال`,
-    sendCodeFailed: "تعذّر إرسال الرمز — جرّب تاني",
-    verifyFailed: "تعذّر التحقق من الرمز — جرّب تاني",
+    invalidEmail: "الإيميل مش صحيح",
+    invalidCode: "الرمز غلط أو انتهت صلاحيته",
+    tooManyCodes: "محاولات كتيرة — جرّب تاني بعد ساعة",
+    cooldownSoon: (s: number) => `استنى ${s} ثانية قبل ما تبعت تاني`,
+    sendCodeFailed: "ما قدرناش نبعت الرمز — جرّب تاني",
+    verifyFailed: "الرمز مش صح — جرّب تاني",
     mockCodeNote: (code: string) => `وضع التجربة — الرمز: ${code}`,
-    loginSuccess: "أهلاً بك!",
+    loginSuccess: "أهلاً بيك!",
     close: "إغلاق",
     // ── Pay-time login gate ──
-    gateTitle: "أكمل الدخول لإتمام الدفع",
-    gateBody: "الدفع يحتاج تسجيل دخول سريع بالبريد — رمز من 6 أرقام بدون كلمة سر، ومدفوعتك تكمل لوحدها بعد التأكيد.",
-    gateResuming: "جارٍ متابعة الدفع…",
+    gateTitle: "سجّل الدخول عشان تكمل الدفع",
+    gateBody: "الدفع محتاج دخول سريع بالإيميل — رمز من 6 أرقام ومن غير كلمة سر. أول ما تأكّد، عملية الدفع هتكمل لوحدها.",
+    gateResuming: "بنكمّل عملية الدفع…",
     // ── Card drawer (supporters) ──
     supporters: "الداعمون",
-    supportersCount: (n: number) => `${n.toLocaleString("en-US")} داعم`,
-    noSupporters: "لسه مفيش داعمين لهذه البطاقة.",
+    supportersCount: (n: number) =>
+      n === 1
+        ? "داعم واحد"
+        : n === 2
+          ? "داعمان"
+          : n <= 10
+            ? `${n.toLocaleString("en-US")} داعمين`
+            : `${n.toLocaleString("en-US")} داعماً`,
+    noSupporters: "لسه مفيش داعمين للقائمة دي.",
     anonymous: "مجهول",
     youLabel: "أنت",
     save: "حفظ",
@@ -156,18 +162,30 @@ export const dict = {
     // ── Profile ──
     profileNameLabel: "الاسم",
     profileEmailLabel: "البريد",
+    changePhoto: "تغيير الصورة",
+    removePhoto: "إزالة الصورة",
+    avatarTooLarge: "الصورة أكبر من 2 ميجابايت",
+    avatarUnsupportedType: "الصورة لازم PNG أو JPG أو WebP",
+    avatarUploadFailed: "ما قدرناش نرفع الصورة — جرّب تاني",
     publicProfileToggle: "حساب عام",
     publicProfileHint:
-      "الحساب العام: اسمك يظهر في قوائم الداعمين وملفك عام. الحساب الخاص: تظهر كمجهول دائماً.",
+      "لو خليت حسابك عام: اسمك هيظهر في قوائم الداعمين وملفك يبقى متاح للكل. لو خاص: هتظهر باسم مجهول دايماً.",
     myPayments: "مدفوعاتي",
-    rankOnCard: (n: number) => `#${n} على البطاقة`,
-    timesPaid: (n: number) => `${n.toLocaleString("en-US")} دفعة`,
+    rankOnCard: (n: number) => `#${n} على القائمة`,
+    timesPaid: (n: number) =>
+      n === 1
+        ? "دفعة واحدة"
+        : n === 2
+          ? "دفعتان"
+          : n <= 10
+            ? `${n.toLocaleString("en-US")} دفعات`
+            : `${n.toLocaleString("en-US")} دفعة`,
     noPayments: "مفيش مدفوعات مربوطة بحسابك لسه.",
-    noSupportedCards: "لا توجد بطاقات مدعومة بعد.",
+    noSupportedCards: "لسه مفيش قوائم دعمتها.",
     signOut: "خروج",
-    loginToSeeProfile: "سجّل الدخول لعرض ملفك.",
-    joinedAt: (d: string) => `انضم ${d}`,
-    supportedCardsTitle: "البطاقات المدعومة",
+    loginToSeeProfile: "سجّل دخولك عشان تشوف ملفك.",
+    joinedAt: (d: string) => `عضو منذ ${d}`,
+    supportedCardsTitle: "القوائم اللي دعمتها",
   },
   en: {
     siteName: "outbidarabs",
@@ -241,7 +259,7 @@ export const dict = {
     earningsPrefix: "The",
     earningsHighlight: "Arab outbid board",
     earningsSuffix: "has made",
-    sinceItsLaunch: "since its launch",
+    sinceFromLaunch: (d: string) => `${d} since its launch`,
     launchedOnDate: "August 21st, 2026",
     launchedOnSentence: (d: string) => `The site launched on ${d}.`,
     crazyThings: "By the numbers since launch:",
@@ -255,8 +273,6 @@ export const dict = {
     rulesRankingTitle: "How ranking works",
     rulesRanking1:
       "Ranking is determined only by total bid amount — the highest total bid takes #1. New listings start at",
-    rulesRankingMin: "minimum",
-    rulesRankingMax: "$999,999 maximum.",
     rulesRankingTime: "Equal bids: the older bid keeps the higher rank.",
     rulesRanking2:
       "Anyone can raise an existing listing — not just whoever added it. Enter the same account or URL and bid anything above the current total: you pay only the difference, not the full amount, and you appear among the card's supporters.",
@@ -320,6 +336,11 @@ export const dict = {
     // ── Profile ──
     profileNameLabel: "Name",
     profileEmailLabel: "Email",
+    changePhoto: "Change photo",
+    removePhoto: "Remove photo",
+    avatarTooLarge: "Image must be under 2MB",
+    avatarUnsupportedType: "Image must be PNG, JPG, or WebP",
+    avatarUploadFailed: "Couldn't upload the image — try again",
     publicProfileToggle: "Public profile",
     publicProfileHint:
       "Public: your name shows on supporters lists and your profile page is visible. Private: you always appear as Anonymous.",

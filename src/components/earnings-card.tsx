@@ -8,11 +8,8 @@ import { durationSince } from "@/lib/format";
  * "This simple side project made  $118,411  since its launch 56 hours ago"
  */
 export function EarningsCard({ revenue, launchedAt }: { revenue: number; launchedAt: string }) {
-  const { t, lang } = useLang();
-  // Word order differs: AR "منذ إطلاقه 22 ساعة" vs EN "1 day since its launch"
-  const duration = durationSince(launchedAt, t);
-  const sinceLine =
-    lang === "ar" ? `${t.sinceItsLaunch} ${duration}` : `${duration} ${t.sinceItsLaunch}`;
+  const { t } = useLang();
+  const sinceLine = t.sinceFromLaunch(durationSince(launchedAt, t));
   return (
     <section className="mt-14 text-center">
       <p className="text-sm font-medium text-muted-foreground text-pretty">

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   if (existing && amount <= existing.bid_amount) {
     const msg =
       lang === "ar"
-        ? `هذه القائمة بسعر ${usd(existing.bid_amount)} بالفعل — ارفع سعرك بدولار واحد على الأقل`
+        ? `هذه القائمة موجودة بالفعل عند ${usd(existing.bid_amount)} — زايد بمبلغ أعلى بفارق دولار واحد على الأقل`
         : `This listing is already at ${usd(existing.bid_amount)} — raise your bid by at least $1`;
     return NextResponse.json({ error: msg }, { status: 400 });
   }

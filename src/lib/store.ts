@@ -325,6 +325,7 @@ export async function getStats(): Promise<SiteStats> {
       listingCount: all.length,
       highestBid: sorted[0]?.bid_amount ?? 0,
       highestBidder: sorted[0]?.display_name ?? null,
+      highestBidUrl: sorted[0]?.url ?? null,
       launchedAt: LAUNCH_ISO,
       statsSource: df ? "datafast" : "internal",
     };
@@ -333,7 +334,7 @@ export async function getStats(): Promise<SiteStats> {
     supabase().from("site_stats").select("key, value"),
     supabase()
       .from("listings")
-      .select("bid_amount, display_name")
+      .select("bid_amount, display_name, url")
       .eq("is_active", true)
       .order("bid_amount", { ascending: false })
       .limit(1),
@@ -349,6 +350,7 @@ export async function getStats(): Promise<SiteStats> {
     listingCount: countRes.count ?? 0,
     highestBid: topRes.data?.[0]?.bid_amount ?? 0,
     highestBidder: topRes.data?.[0]?.display_name ?? null,
+    highestBidUrl: topRes.data?.[0]?.url ?? null,
     launchedAt: LAUNCH_ISO,
     statsSource: df ? "datafast" : "internal",
   };

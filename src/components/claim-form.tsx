@@ -185,6 +185,37 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     return () => window.removeEventListener("outbidarabs:boost", onBoost);
   }, []);
 
+  // Deep-linked boost (?boost=<card url>&pay=<delta>#claim): the about page's
+  // "Back a creator" lands here with the exact card prefilled — same state as
+  // the board's boost buttons, just across a navigation. Params are stripped
+  // after applying so refreshes and shares stay clean.
+  const appliedDeepLink = useRef(false);
+  useEffect(() => {
+    if (appliedDeepLink.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const boost = params.get("boost");
+    if (!boost) return;
+    appliedDeepLink.current = true;
+    const pay = parseInt(params.get("pay") ?? "", 10);
+    touched.current = true;
+    setIdentity(boost);
+    setError(null);
+    // A valid pay delta wins; otherwise fall back to beating the current #1.
+    const fallback = bids[0] > 0 ? bids[0] + 1 : MIN_BID;
+    setAmount(String(Math.min(MAX_BID, Math.max(MIN_BID, Number.isFinite(pay) && pay > 0 ? pay : fallback))));
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("boost");
+    clean.searchParams.delete("pay");
+    window.history.replaceState(null, "", clean.toString());
+    const tm = setTimeout(
+      () => document.getElementById("claim")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      80
+    );
+    return () => clearTimeout(tm);
+    // Runs once on mount — `bids` read from initial server-fetched props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const value = parseInt(amount, 10) || 0; // what the visitor pays
   const existing = previewOk?.existing ?? null;
   // Resulting total bid after payment — what the board ranks and the

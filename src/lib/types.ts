@@ -38,6 +38,7 @@ export type SiteStats = {
   listingCount: number;
   highestBid: number;
   highestBidder: string | null;
+  highestBidUrl?: string | null; // canonical URL of the #1 card (boost deep-links)
   launchedAt: string; // ISO
   statsSource?: "datafast" | "internal"; // which analytics the numbers come from
 };

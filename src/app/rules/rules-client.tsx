@@ -11,9 +11,9 @@ function P({ children }: { children: React.ReactNode }) {
   return <p className="mt-3 leading-relaxed text-muted-foreground text-pretty">{children}</p>;
 }
 
-function H2({ children }: { children: React.ReactNode }) {
+function H2({ id, children }: { id?: string; children: React.ReactNode }) {
   return (
-    <h2 className="mt-8 text-xl font-bold tracking-[-0.02em]">{children}</h2>
+    <h2 id={id} className="mt-8 scroll-mt-6 text-xl font-bold tracking-[-0.02em]">{children}</h2>
   );
 }
 
@@ -35,7 +35,7 @@ export function RulesClient() {
           <h1 className="text-3xl font-bold tracking-[-0.03em]">{t.rulesTitle}</h1>
           <P>{t.rulesIntro}</P>
 
-          <H2>{t.rulesRankingTitle}</H2>
+          <H2 id="ranking">{t.rulesRankingTitle}</H2>
           <P>
             {t.rulesRanking1} <Code>{`$${MIN_BID}`}</Code> – <Code>$999,999</Code>.
           </P>

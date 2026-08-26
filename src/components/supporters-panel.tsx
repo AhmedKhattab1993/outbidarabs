@@ -60,7 +60,7 @@ function SupporterRow({ rank, s, isYou }: { rank: number; s: Supporter; isYou: b
       <span className="w-6 shrink-0 text-center text-[11px] font-bold text-muted-foreground tabular-nums">
         {rank}
       </span>
-      <UserAvatar userId={s.publicId ?? s.key} name={s.name} className="size-7 text-xs" />
+      <UserAvatar userId={s.publicId ?? s.key} name={s.name} src={s.avatarUrl} className="size-7 text-xs" />
       <span
         dir="auto"
         className={

@@ -426,13 +426,17 @@ export async function getProfileByPublicId(publicId: string): Promise<Profile | 
   return (data as Profile) ?? null;
 }
 
+// avatar_url is written only by the avatar route (/api/profile/avatar) —
+// the generic profile PATCH never accepts it, so clients can't point
+// profiles at arbitrary remote URLs (tracking pixels, etc.).
 export async function updateProfile(
   userId: string,
-  patch: { display_name?: string; is_public?: boolean }
+  patch: { display_name?: string; is_public?: boolean; avatar_url?: string | null }
 ): Promise<Profile | null> {
   const update: Record<string, unknown> = {};
   if (patch.display_name !== undefined) update.display_name = patch.display_name.trim().slice(0, 40);
   if (patch.is_public !== undefined) update.is_public = !!patch.is_public;
+  if (patch.avatar_url !== undefined) update.avatar_url = patch.avatar_url;
   if (Object.keys(update).length === 0) return getProfile(userId);
 
   if (MOCK_MODE) {
@@ -440,6 +444,9 @@ export async function updateProfile(
       if (u.id === userId) {
         if (typeof update.display_name === "string") u.display_name = update.display_name;
         if (typeof update.is_public === "boolean") u.is_public = update.is_public;
+        if (update.avatar_url === null || typeof update.avatar_url === "string") {
+          u.avatar_url = update.avatar_url;
+        }
         return getProfile(userId);
       }
     }

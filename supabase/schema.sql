@@ -484,6 +484,19 @@ grant execute on function consume_otp_allowance(text, integer, integer, integer)
 grant execute on function refund_otp_allowance(text) to service_role;
 
 -- ───────────────────────────────────────────────────────
+-- Avatars bucket (mirrors migrations/20250826000001_avatars_bucket.sql)
+-- ───────────────────────────────────────────────────────
+-- Profile photos: public bucket, 2MB, PNG/JPEG/WebP only (no SVG). Writes go
+-- through the service-role avatar route (magic-byte sniffed); reads are open
+-- by design — object paths are unguessable ({public_id}/{uuid}.{ext}).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update
+  set public = true,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- ───────────────────────────────────────────────────────
 -- No claims (mirrors migrations/20250824000004_no_claims.sql)
 -- ───────────────────────────────────────────────────────
 -- Cards are agnostic — no ownership. Drops the claims table if a previous

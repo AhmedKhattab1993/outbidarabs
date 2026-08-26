@@ -1,7 +1,10 @@
 "use client";
 
-// User avatar (D4): generated initial + gradient — no upload, no moderation.
-// Deterministic per user id; avatar_url (future) would override.
+import { useEffect, useState } from "react";
+
+// User avatar: uploaded photo (profiles.avatar_url) with a generated
+// initial + gradient fallback. Deterministic per user id. Private profiles
+// never carry an avatar URL here (stripped in accounts.ts supporters paths).
 
 const GRADIENTS = [
   "from-rose-400 to-orange-400",
@@ -21,12 +24,19 @@ function gradientFor(id: string): string {
 export function UserAvatar({
   userId,
   name,
+  src,
   className = "",
 }: {
   userId: string;
   name: string | null;
+  src?: string | null;
   className?: string;
 }) {
+  // Fallback: broken/missing photo → gradient initial (same chain idea as
+  // the listing Avatar component).
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+
   const initial = (name?.replace(/^@/, "") ?? "?").trim().charAt(0).toUpperCase() || "?";
   return (
     <span
@@ -38,7 +48,18 @@ export function UserAvatar({
         className
       }
     >
-      {initial}
+      {src && !failed ? (
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          className="size-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initial
+      )}
     </span>
   );
 }

@@ -59,6 +59,7 @@ export function SiteHeader() {
                 <UserAvatar
                   userId={user.publicId ?? user.email}
                   name={user.profile?.display_name || user.email}
+                  src={user.profile?.avatar_url ?? null}
                   className="size-7 text-xs ring-1 ring-black/5 dark:ring-white/10"
                 />
               </Link>

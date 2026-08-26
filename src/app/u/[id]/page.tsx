@@ -44,6 +44,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           <UserAvatar
             userId={profile.public_id}
             name={name}
+            src={profile.avatar_url}
             className="mx-auto size-20 text-3xl ring-1 ring-black/5 dark:ring-white/10"
           />
           <h1 dir="auto" className="mt-3 text-xl font-bold tracking-[-0.02em]">

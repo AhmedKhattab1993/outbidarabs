@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getActivity, getLeaderboard, getTrending } from "@/lib/store";
+import { getBids, getActivity, getLeaderboard, getTrending } from "@/lib/store";
 import { isPlatformFilter } from "@/lib/platforms";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,9 @@ export async function GET(req: NextRequest) {
   try {
     if (section === "trending") {
       return NextResponse.json({ items: await getTrending(5) });
+    }
+    if (section === "bids") {
+      return NextResponse.json({ bids: await getBids() });
     }
     if (section === "activity") {
       return NextResponse.json({ items: await getActivity(6) });

@@ -41,7 +41,7 @@ type PreviewState =
   | { kind: "error"; message: string }
   | null;
 
-export function ClaimForm({ topBid }: { topBid: number }) {
+export function ClaimForm({ bids }: { bids: number[] }) {
   const { t, lang } = useLang();
   const { user, loading: authLoading, refresh } = useAuth();
   const [identity, setIdentity] = useState("");
@@ -50,6 +50,8 @@ export function ClaimForm({ topBid }: { topBid: number }) {
   const [platformChoice, setPlatformChoice] = useState<Platform>("instagram");
   const [preview, setPreview] = useState<PreviewState>(null);
   const [fetching, setFetching] = useState(false);
+  // Active board bids sorted desc — the source of every rank calculation here.
+  const topBid = bids[0] ?? 0;
   const [amount, setAmount] = useState(String(topBid > 0 ? topBid + 1 : MIN_BID));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -168,6 +170,34 @@ export function ClaimForm({ topBid }: { topBid: number }) {
   const value = parseInt(amount, 10) || 0;
   const existing = previewOk?.existing ?? null;
   const diff = existing && value > existing.bid_amount ? value - existing.bid_amount : 0;
+
+  // ── Live rank preview: what spot does `value` buy after payment? ──
+  // Ties lose to the earlier payer (board sorts by bid desc, last_bid_at
+  // asc), so count every bid >= value — not just those strictly above. An
+  // equal bid never dislodges the sitting holder.
+  const atOrAbove = value >= MIN_BID ? bids.filter((b) => b >= value) : [];
+  const projectedRank = value >= MIN_BID ? atOrAbove.length + 1 : 0;
+  // Cheapest bump that gains a rank: beat the smallest bid at-or-above value.
+  // Under ties that price can jump more than one rank (beating one 99 beats
+  // every 99) — re-derive where it actually lands for the upsell label.
+  const nextRankPrice = projectedRank > 1 ? atOrAbove[atOrAbove.length - 1] + 1 : 0;
+  const nextRankUp =
+    nextRankPrice > value ? 1 + bids.filter((b) => b >= nextRankPrice).length : 0;
+  const rankMedal = { 1: "🥇", 2: "🥈", 3: "🥉" }[projectedRank as 1 | 2 | 3] ?? "";
+
+  // Quick-pick chips: the exact price of each top-3 rank (holder's bid + $1).
+  // A price that lands on a different rank (again: ties) isn't offered —
+  // a "#2" chip must really take #2.
+  const rankChips = useMemo(() => {
+    const chips: Array<{ rank: number; price: number }> = [];
+    for (let k = 1; k <= 3 && k <= bids.length; k++) {
+      const price = bids[k - 1] + 1;
+      if (price > MAX_BID) break;
+      if (1 + bids.filter((b) => b >= price).length === k) chips.push({ rank: k, price });
+    }
+    return chips;
+  }, [bids]);
+
   const fetchedNothing = previewOk != null && previewOk.meta == null && !previewOk.existing && !fetching;
   // Ground truth shown in the card: platform meta first, then the existing
   // listing, then the raw handle — never editable here.
@@ -267,11 +297,7 @@ export function ClaimForm({ topBid }: { topBid: number }) {
       return;
     }
     if (existing && value <= existing.bid_amount) {
-      setError(
-        lang === "ar"
-          ? `هذه القائمة بسعر ${usd(existing.bid_amount)} بالفعل — ارفع سعرك بدولار واحد على الأقل`
-          : `This listing is already at ${usd(existing.bid_amount)} — raise your bid by at least $1`
-      );
+      setError(t.raiseAboveCurrent(existing.bid_amount));
       return;
     }
     // Pay-time gate: logged-out visitors swap to the inline email-code step
@@ -444,6 +470,33 @@ export function ClaimForm({ topBid }: { topBid: number }) {
           </div>
         )}
 
+        {/* ── Quick rank picks: exact price of each top-3 spot, one tap ── */}
+        {rankChips.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {rankChips.map((c) => (
+              <button
+                key={c.rank}
+                type="button"
+                onClick={() => {
+                  touched.current = true;
+                  setAmount(String(c.price));
+                }}
+                disabled={loading}
+                aria-label={t.takeRankFor(c.rank, c.price)}
+                className={
+                  "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-bold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 " +
+                  (value === c.price
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-input text-muted-foreground hover:border-primary/40 hover:text-primary")
+                }
+              >
+                #{c.rank}
+                <span className="text-primary tabular-nums">{usd(c.price)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── Bid amount + CTA (centered under the input, matching the form) ── */}
         <div className="flex flex-col items-stretch justify-center gap-2 md:flex-row md:items-center">
           <div className="flex items-center justify-center gap-1.5">
@@ -459,33 +512,34 @@ export function ClaimForm({ topBid }: { topBid: number }) {
             >
               −
             </button>
-            <label className="relative inline-block text-2xl font-bold tracking-[-0.03em] text-primary tabular-nums">
+            {/* A real, visibly editable field — the ± steppers are fine-tuning,
+                not the only way in. Selects all on focus so a fresh amount is
+                one tap + type away. */}
+            <label className="flex h-12 min-w-0 flex-1 cursor-text items-center justify-center gap-0.5 rounded-2xl border border-input bg-transparent px-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 md:flex-none md:w-52 dark:bg-input/30">
+              <span aria-hidden="true" className="text-2xl font-bold text-primary">
+                $
+              </span>
               <span className="sr-only">{t.amountDollars}</span>
-              <span className="invisible whitespace-nowrap px-0.5" aria-hidden="true">
-                ${amount || "0"}
-              </span>
-              <span className="absolute inset-0 flex items-baseline justify-center whitespace-nowrap">
-                <span aria-hidden="true">$</span>
-                <span className="relative inline-block">
-                  {/* digit-sized sizer keeps the input exactly as wide as the
-                      number, so the $ hugs the digits with no dead space */}
-                  <span className="invisible" aria-hidden="true">
-                    {amount || "0"}
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    className="absolute inset-0 w-full bg-transparent p-0 text-center font-[inherit] text-[inherit] tracking-[inherit] tabular-nums outline-none"
-                    value={amount}
-                    onChange={(e) => {
-                      touched.current = true;
-                      setAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6));
-                    }}
-                    disabled={loading}
-                  />
-                </span>
-              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                dir="ltr"
+                aria-label={t.amountDollars}
+                placeholder={String(MIN_BID)}
+                className="min-w-0 flex-1 bg-transparent text-center text-2xl font-bold tracking-[-0.03em] text-primary tabular-nums outline-none placeholder:text-muted-foreground/40"
+                value={amount}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  touched.current = true;
+                  setAmount(e.target.value.replace(/[^0-9]/g, "").slice(0, 6));
+                }}
+                onBlur={() => {
+                  // Settle on leave: empty/0 → floor, oversized → MAX_BID.
+                  if (touched.current) setAmount(String(clamp(parseInt(amount || "0", 10) || 0)));
+                }}
+                disabled={loading}
+              />
             </label>
             <button
               type="button"
@@ -509,6 +563,35 @@ export function ClaimForm({ topBid }: { topBid: number }) {
           </button>
         </div>
 
+        {/* ── Outcome preview: the rank this exact amount lands after payment.
+            Mirrors the board's tie rule — equal bids stay behind the earlier
+            payer — so the number shown is the number paid for. ── */}
+        {value >= MIN_BID && (
+          <p
+            className="text-center text-xs font-semibold leading-relaxed text-pretty"
+            aria-live="polite"
+          >
+            {existing && value <= existing.bid_amount ? (
+              <span className="text-destructive">{t.raiseAboveCurrent(existing.bid_amount)}</span>
+            ) : projectedRank === 1 ? (
+              <span className="text-primary">
+                {bids.length === 0 ? t.firstOnBoard : `🥇 ${t.takesRank(1)}`}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                {rankMedal && `${rankMedal} `}
+                {t.takesRank(projectedRank)}
+                {nextRankUp > 0 && (
+                  <span className="text-primary">
+                    {" · "}
+                    {t.moreForRank(nextRankPrice - value, nextRankUp)}
+                  </span>
+                )}
+              </span>
+            )}
+          </p>
+        )}
+
         {error && (
           <p className="text-center text-xs font-medium text-destructive" role="alert">
             {error}
@@ -519,9 +602,6 @@ export function ClaimForm({ topBid }: { topBid: number }) {
           <span className="font-semibold text-primary/80">
             {t.startsFrom} ${MIN_BID}.
           </span>{" "}
-          {topBid > 0 ? t.top1Hint(topBid + 1) : t.boardEmptyCta}
-        </p>
-        <p className="text-center text-xs leading-relaxed text-muted-foreground/80 text-pretty">
           {t.alreadyOnList}
         </p>
       </form>

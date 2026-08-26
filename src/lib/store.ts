@@ -208,6 +208,20 @@ export async function getLeaderboard(
   };
 }
 
+/** All active bids, sorted desc — powers the claim form's live "takes rank #N"
+ *  preview. Numbers only, so even a large board stays a tiny payload. */
+export async function getBids(): Promise<number[]> {
+  if (MOCK_MODE) return sortBoard(mockListings()).map((l) => l.bid_amount);
+  const { data, error } = await supabase()
+    .from("listings")
+    .select("bid_amount")
+    .eq("is_active", true)
+    .order("bid_amount", { ascending: false })
+    .limit(5000);
+  if (error) throw error;
+  return (data ?? []).map((r: { bid_amount: number }) => r.bid_amount);
+}
+
 /** Rank map for a set of listings (global rank by bid desc, last_bid_at asc). */
 export async function getRanks(ids: string[]): Promise<Map<string, number>> {
   const ranks = new Map<string, number>();

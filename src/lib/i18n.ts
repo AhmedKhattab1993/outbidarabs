@@ -32,6 +32,11 @@ export const dict = {
     amountDollars: "المبلغ بالدولار",
     decreaseBid: "أنقص دولاراً",
     increaseBid: "زد دولاراً",
+    takesRank: (n: number) => `ياخد المركز #${n}`,
+    moreForRank: (amount: number, n: number) => `+${usd(amount)} للمركز #${n}`,
+    firstOnBoard: "هتبقى المركز #1 — أول قائمة على اللوحة 🥇",
+    raiseAboveCurrent: (bid: number) => `سعرك الحالي ${usd(bid)} — ارفع دولاراً على الأقل`,
+    takeRankFor: (n: number, price: number) => `خد المركز #${n} مقابل ${usd(price)}`,
     payMore: (n: number) => `ادفع ${usd(n)} أكثر`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
       `موجود على اللوحة بسعر ${usd(bid)}. الدفع يحتسب فرق ${usd(diff)} فقط.`,
@@ -48,7 +53,6 @@ export const dict = {
     needsUrl: (p: Platform) => `عشان ${platformLabel(p, "ar")} الصق الرابط الكامل`,
     previewSourceNote: "البيانات تُجلب تلقائيًا من المنصة نفسها — للعرض فقط.",
     fetchFailedNote: "ما قدرناش نجيب بيانات الحساب الآن — هنعرض المعرّف الأساسي.",
-    top1Hint: (n: number) => `أقل سعر ياخد المركز الأول دلوقتي: ${usd(n)}`,
     // ── Board rows ──
     trending: "الأكثر رواجاً الآن",
     clicksPerHour: "نقرة/س",
@@ -189,6 +193,11 @@ export const dict = {
     amountDollars: "Amount in dollars",
     decreaseBid: "Decrease bid by one dollar",
     increaseBid: "Increase bid by one dollar",
+    takesRank: (n: number) => `Takes #${n}`,
+    moreForRank: (amount: number, n: number) => `+${usd(amount)} takes #${n}`,
+    firstOnBoard: "You'll be #1 — the board's first listing 🥇",
+    raiseAboveCurrent: (bid: number) => `Your current bid is ${usd(bid)} — raise it by at least $1`,
+    takeRankFor: (n: number, price: number) => `Take #${n} for ${usd(price)}`,
     payMore: (n: number) => `Pay ${usd(n)} more`,
     alreadyOnBoardAt: (bid: number, diff: number) =>
       `Already on the board at ${usd(bid)}. Checkout only charges the ${usd(diff)} difference.`,
@@ -205,7 +214,6 @@ export const dict = {
     needsUrl: (p: Platform) => `Paste the full link for ${platformLabel(p, "en")}`,
     previewSourceNote: "Pulled straight from the platform — view only.",
     fetchFailedNote: "Couldn't fetch account data right now — showing the basic handle.",
-    top1Hint: (n: number) => `Bid ${usd(n)} to take #1 right now`,
     // ── Board rows ──
     trending: "Trending right now",
     clicksPerHour: "clicks/h",

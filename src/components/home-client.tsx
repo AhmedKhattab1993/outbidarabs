@@ -20,6 +20,7 @@ type InitialData = {
   board: LeaderboardPage;
   page: number;
   platform: PlatformFilter;
+  bids: number[]; // active bids sorted desc — claim form's rank preview
   trending: TrendingItem[];
   activity: ActivityItem[];
   stats: SiteStats;
@@ -35,6 +36,7 @@ export function HomeClient({
   const { t } = useLang();
   const [board, setBoard] = useState(initial.board);
   const [platform, setPlatform] = useState<PlatformFilter>(initial.platform);
+  const [bids, setBids] = useState(initial.bids);
   const [trending, setTrending] = useState(initial.trending);
   const [activity, setActivity] = useState(initial.activity);
   const [stats, setStats] = useState(initial.stats);
@@ -43,17 +45,20 @@ export function HomeClient({
   const loadBoard = useCallback(
     async (p: PlatformFilter) => {
       try {
-        const [bRes, sRes, tRes, aRes] = await Promise.all([
+        const [bRes, sRes, bidsRes, tRes, aRes] = await Promise.all([
           fetch(`/api/board?page=1&platform=${p}`, { cache: "no-store" }),
           fetch("/api/stats", { cache: "no-store" }),
+          fetch("/api/board?section=bids", { cache: "no-store" }),
           // side cards hidden → skip their fetches entirely
           showSideCards ? fetch("/api/board?section=trending", { cache: "no-store" }) : null,
           showSideCards ? fetch("/api/board?section=activity", { cache: "no-store" }) : null,
         ]);
         const b = await bRes.json();
         const st = await sRes.json();
+        const bd = await bidsRes.json();
         if (b.listings) setBoard(b);
         if (st && typeof st === "object") setStats((prev) => ({ ...prev, ...st }));
+        if (Array.isArray(bd?.bids)) setBids(bd.bids.map(Number));
         if (tRes) {
           const tr = await tRes.json();
           if (tr.items) setTrending(tr.items);
@@ -147,7 +152,7 @@ export function HomeClient({
             </p>
           </section>
 
-          <ClaimForm topBid={board.topBid} />
+          <ClaimForm bids={bids} />
 
           {/* ── Board ── */}
           <div>

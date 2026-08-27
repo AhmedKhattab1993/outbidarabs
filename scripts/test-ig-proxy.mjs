@@ -3,6 +3,11 @@
 //
 //   node --experimental-strip-types --import ./scripts/register-paths.mjs scripts/test-ig-proxy.mjs
 //
+// Validate a REAL provider key before deploying (Bright Data / ScraperAPI / …):
+//
+//   … scripts/test-ig-proxy.mjs --live "http://brd-customer-…-zone-ZONE:PASS@brd.superproxy.io:22235"
+//   … scripts/test-ig-proxy.mjs --live "https://api.scraperapi.com/?api_key=KEY&url={url}"
+//
 // Covers:
 //  1. template mode  — IG_PROXY_URL with {url} placeholder (ScraperAPI style):
 //     real HTTP via curl → status handling → user-object parsing
@@ -77,6 +82,29 @@ try {
   check("dev-fixture: deterministic payload", /khaby/i.test(String(user?.full_name ?? "")) && /fixture/.test(String(user?.full_name ?? "")));
 } catch (e) {
   check("dev-fixture: deterministic payload", false, String(e.message ?? e));
+}
+
+// 4. live provider key (only with --live <IG_PROXY_URL value>) — hits real
+//    Instagram through YOUR proxy once; prints what the job will persist.
+const liveIdx = process.argv.indexOf("--live");
+if (liveIdx !== -1) {
+  const liveUrl = process.argv[liveIdx + 1];
+  if (!liveUrl) {
+    console.log("FAIL --live needs the IG_PROXY_URL value as the next argument");
+    fails++;
+  } else {
+    process.env.IG_PROXY_URL = liveUrl;
+    try {
+      const t0 = Date.now();
+      const user = await proxiedIgUser("nasa", 45_000);
+      const got = [user?.full_name, user?.biography, user?.profile_pic_url].filter(Boolean).length;
+      check(`live: real IG profile via provider (${got}/3 fields)`, got >= 1,
+        `${Date.now() - t0}ms  title=${JSON.stringify(user?.full_name ?? null)}`);
+      if (user?.profile_pic_url) console.log(`      avatar: ${String(user.profile_pic_url).slice(0, 90)}…`);
+    } catch (e) {
+      check("live: real IG profile via provider", false, String(e.message ?? e));
+    }
+  }
 }
 
 server.close();

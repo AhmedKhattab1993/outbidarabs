@@ -85,11 +85,27 @@ committing.
 node --experimental-strip-types --import ./scripts/register-paths.mjs \
   scripts/test-ig-proxy.mjs
 
-# staging end-to-end (set IG_PROXY_URL=dev-fixture:// on preview scope):
+# validate a REAL provider key locally before deploying (30s):
+node --experimental-strip-types --import ./scripts/register-paths.mjs \
+  scripts/test-ig-proxy.mjs --live "http://brd-customer-…-zone-ZONE:PASS@brd.superproxy.io:22235"
+
+# staging end-to-end (set IG_PROXY_URL on preview scope, then):
 curl "https://staging.outbidarabs.lol/api/preview?identity=https://instagram.com/nasa"
 # → {"meta":null,"fetchStatus":"pending",…}; poll again a few seconds later
-# → {"meta":{"title":"NASA (fixture …)","image":"https://…supabase.co/storage/v1/object/public/listing-meta/….jpeg"},…}
+# → {"meta":{"title":"NASA",…},…}
 ```
+
+### Bright Data quickstart (recommended)
+
+1. brightdata.com → Start free (Web Unlocker product) — free tier 5K
+   requests/month, no card; PAYG beyond that at ~$1.5/1K, success-only.
+2. Dashboard → create a **Web Unlocker** zone → copy its credentials
+   (`brd-customer-…-zone-…` + password).
+3. Validate locally (command above, `--live` + `http://USER:PASS@brd.superproxy.io:22235`).
+4. Check the dashboard for an `instagram.com` domain multiplier — if one
+   applies, budget accordingly (the free 5K shrinks by it).
+5. `vercel env add IG_PROXY_URL preview` with the same URL →
+   `bash scripts/deploy.sh` → paste a fresh IG handle on staging.
 
 ## Ops notes
 

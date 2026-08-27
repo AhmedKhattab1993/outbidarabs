@@ -56,7 +56,8 @@ export const dict = {
     needsUrl: (p: Platform) => `إضافة حسابات ${platformLabel(p, "ar")} تتطلب الرابط الكامل`,
     previewSourceNote: "البيانات مسترجعة من المنصة للمعاينة.",
     fetchPendingNote: "جارٍ جلب تفاصيل الحساب — يستغرق ذلك عادةً ثوانٍ قليلة.",
-    fetchFailedNote: "تعذر جلب تفاصيل الحساب حالياً — سيُعرض اسم المستخدم. يمكنك كتابة الاسم في الحقل بالأسفل، وستكتمل البطاقة تلقائياً لاحقاً.",
+    fetchSlowNote: "ما زال الجلب مستمراً — بعض الحسابات تستغرق حتى دقيقة. يمكنك كتابة الاسم بالأسفل، وستكتمل البطاقة فور وصول البيانات.",
+    fetchFailedNote: "تعذر جلب تفاصيل الحساب حالياً — سيُعرض اسم المستخدم. يمكنك كتابة الاسم في الحقل بالأسفل.",
     displayNameLabel: "الاسم المعروض على البطاقة",
     displayNameHint: "إذا لم تظهر تفاصيل الحساب، اكتب الاسم الذي تريد ظهوره — أو اتركه فارغاً لاستخدام اسم المستخدم.",
     // ── Board rows ──
@@ -244,7 +245,8 @@ export const dict = {
     needsUrl: (p: Platform) => `Paste the full link for ${platformLabel(p, "en")}`,
     previewSourceNote: "Information fetched from the platform for the preview.",
     fetchPendingNote: "Fetching account details — this usually takes a few seconds.",
-    fetchFailedNote: "Couldn't fetch account details right now — showing the username. You can type the card name below; the card fills in automatically once details arrive.",
+    fetchSlowNote: "Still fetching — some accounts take up to a minute. You can type the name below; the card fills in as soon as details arrive.",
+    fetchFailedNote: "Couldn't fetch account details right now — showing the username. You can type the card name below.",
     displayNameLabel: "Name shown on your card",
     displayNameHint: "If account details didn't load, type the name to display — or leave empty to use the handle.",
     // ── Board rows ──

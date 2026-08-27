@@ -6,6 +6,7 @@ import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { identityErrorMessages, normalizeIdentity } from "@/lib/identity";
 import { HANDLE_CANDIDATES, detectPlatform, platformLabel, type Platform } from "@/lib/platforms";
 import { trackEvent } from "@/lib/analytics";
+import { tiktokTrack } from "@/lib/tiktok";
 import { useAuth } from "@/lib/auth-context";
 import { EmailCodeForm } from "@/components/email-code-form";
 import { PlatformIcon, PlatformBadge } from "@/components/platform-icon";
@@ -88,12 +89,12 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   // re-triggers the debounce effect; per-URL attempt counts live in a ref.
   const [pollNonce, setPollNonce] = useState(0);
   const pollAttempts = useRef(new Map<string, number>());
-  // Backoff schedule (~30s window) — mirrors the job's 75s lease loosely:
-  // most fills land within the first two polls, the tail covers slow
-  // proxy unlocks; beyond that the terminal failed note takes over.
-  const POLL_SCHEDULE = [1500, 3000, 5000, 8000, 12000];
-  // True when the poll schedule ran out while still pending — swap the
-  // "fetching…" note for the terminal fallback note at that point.
+  // Backoff schedule covering the full job worst case: endpoint surface
+  // (~28s) → page surface (~15s) → avatar (~10s) can legitimately reach ~55s
+  // inside the 75s lease; polls stop only after that. Cumulative ≈ 68s.
+  const POLL_SCHEDULE = [1500, 3000, 5000, 8000, 12000, 17000, 10000, 12000];
+  // True when the poll schedule ran out while still pending — the slow note
+  // takes over from the spinner (a late row serves on any later refetch).
   const [igExhausted, setIgExhausted] = useState(false);
 
   const previewOk = preview?.kind === "ok" ? preview.data : null;
@@ -307,8 +308,9 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     return chips;
   }, [bids, existing]);
 
-  // Instagram enrichment states for the preview note: still-pending →
-  // "fetching…"; terminal (failed, or polls exhausted) → the fallback note.
+  // Instagram enrichment states for the preview note: actively polling →
+  // "fetching…" spinner; polls exhausted but still pending → honest slow
+  // note; fetchStatus failed → terminal fallback note (job gave up).
   const igPending =
     !!previewOk &&
     previewOk.platform === "instagram" &&
@@ -316,12 +318,20 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     !previewOk.meta &&
     previewOk.fetchStatus === "pending" &&
     !igExhausted;
+  const igSlow =
+    !!previewOk &&
+    previewOk.platform === "instagram" &&
+    !previewOk.existing &&
+    !previewOk.meta &&
+    previewOk.fetchStatus === "pending" &&
+    igExhausted &&
+    !fetching;
   const fetchedNothing =
     !!previewOk &&
     previewOk.platform === "instagram" &&
     !previewOk.existing &&
     !previewOk.meta &&
-    !igPending &&
+    previewOk.fetchStatus === "failed" &&
     !fetching;
   // Ground truth shown in the card: platform meta first, then the existing
   // listing, then the raw handle — never editable here.
@@ -368,6 +378,12 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         // One funnel event per real checkout (never on the pre-login 401
         // attempt) — fired before the navigation below.
         void trackEvent("checkout_started", { amount: p.amount, raise });
+        // TikTok standard event: lets TikTok optimize toward checkout starts.
+        void tiktokTrack("InitiateCheckout", {
+          content_name: raise ? "raise_bid" : "new_bid",
+          value: p.amount,
+          currency: "USD",
+        });
         // The success page polls this id until the webhook applies the payment
         // (mock mode skips polling).
         if (data.checkoutId) {
@@ -629,6 +645,11 @@ export function ClaimForm({ bids }: { bids: number[] }) {
                   <path d="M21 12a9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                 </svg>
                 {t.fetchPendingNote}
+              </p>
+            )}
+            {igSlow && !igPending && (
+              <p className="mt-1.5 px-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                {t.fetchSlowNote}
               </p>
             )}
             {fetchedNothing && (

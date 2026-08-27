@@ -17,6 +17,7 @@ import type { Platform } from "@/lib/platforms";
 import { claimMetaFetch, finishMetaFetch, getMetaCached, MOCK_MODE, supabaseAdmin } from "@/lib/store";
 import type { MetaClaim } from "@/lib/store";
 import { MIME_BY_EXT, sniffImage } from "@/lib/image-sniff";
+import { decodeHtmlEntities } from "@/lib/fetch-meta";
 
 const execFileP = promisify(execFile);
 
@@ -123,6 +124,76 @@ async function curlJson(
   }
 }
 
+/** Fetch text via the system curl binary. Returns {status, body} or null on
+ *  transport errors / timeout. Used for the IG profile-page surface. */
+async function curlText(
+  url: string,
+  headers: Record<string, string>,
+  ms: number,
+  opts: { method?: "GET" | "POST"; body?: string } = {}
+): Promise<{ status: number; body: string } | null> {
+  if (ms < 400) return null;
+  try {
+    const args = [
+      "-s", "--compressed", "-m", `${Math.ceil(ms / 1000)}`,
+      "-w", "\n%{http_code}",
+      ...(opts.method === "POST" ? ["-X", "POST", "-d", opts.body ?? ""] : []),
+      ...Object.entries(headers).flatMap(([k, v]) => ["-H", `${k}: ${v}`]),
+      url,
+    ];
+    const { stdout } = await execFileP("curl", args, { timeout: ms + 500, maxBuffer: 8 * 1024 * 1024 });
+    const lines = stdout.split("\n");
+    const status = parseInt(lines.pop() ?? "", 10);
+    if (!Number.isFinite(status)) return null;
+    return { status, body: lines.join("\n") };
+  } catch {
+    return null;
+  }
+}
+
+/** Extract a user-shaped object from an unlocked instagram.com/{user}/ page:
+ *  og:title ("NAME (@handle) • Instagram …") for the display name, the
+ *  embedded profile JSON biography (attributed to its nearest username —
+ *  suggested/related accounts embed theirs on the same page), and og:image
+ *  for the avatar. Verified against a live unlocked page (themind.space). */
+export function igUserFromPageHtml(html: string, username: string): any | null {
+  if (html.length < 30_000) return null; // login-wall shells are small
+  const ogTitle = html.match(
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"<>]{2,300})["']/i
+  )?.[1] ?? html.match(
+    /<meta[^>]+content=["']([^"<>]{2,300})["'][^>]+property=["']og:title["']/i
+  )?.[1];
+  const fullName = ogTitle
+    ? decodeHtmlEntities(ogTitle).replace(/\s*\(@[^)]*\)\s*[•·].*$/i, "").replace(/\s*\(@[^)]*\)\s*$/i, "").trim()
+    : "";
+  // biography: nearest "username" marker must be this user's
+  let biography: string | null = null;
+  const bios = [...html.matchAll(/"biography":"((?:[^"\\]|\\.)*)"/g)];
+  const own =
+    bios.find((m) => {
+      const before = html.lastIndexOf('"username":"', m.index as number);
+      const after = html.indexOf('"username":"', m.index as number);
+      const at = before >= 0 && (after < 0 || m.index - before < after - m.index) ? before : after;
+      if (at < 0) return false;
+      return html.slice(at + 12, html.indexOf('"', at + 12)) === username;
+    }) ?? (bios.length === 1 ? bios[0] : undefined);
+  if (own) {
+    try {
+      biography = JSON.parse(`"${own[1]}"`);
+    } catch {
+      biography = null;
+    }
+  }
+  const pic =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"<>]{2,600})["']/i)?.[1] ??
+    html.match(/<meta[^>]+content=["']([^"<>]{2,600})["'][^>]+property=["']og:image["']/i)?.[1] ?? null;
+  const user: any = {};
+  if (fullName) user.full_name = fullName;
+  if (biography) user.biography = biography;
+  if (pic && !/rsrc\.php/.test(pic)) user.profile_pic_url = decodeHtmlEntities(pic);
+  return user.full_name || user.biography || user.profile_pic_url ? user : null;
+}
+
 /** Deterministic fixture of a web_profile_info payload — activates only via
  *  IG_PROXY_URL=dev-fixture:// (staging/dev wiring check; never default).
  *  Usernames starting with "notfound" simulate a missing profile so the
@@ -158,18 +229,49 @@ export async function proxiedIgUser(username: string, ms = PROXY_BUDGET_MS): Pro
     `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
   let res: { status: number; json: any } | null;
   if (mode.kind === "brightdata") {
-    // Unlocker REST API: the raw target body comes back as the response —
-    // verified live: 200 + {data:{user:…}} on success; 200 + HTML body for a
-    // missing profile; non-200 + {error:…} on auth/quota problems.
+    // Unlocker REST API, surface 1 — the structured endpoint. Some profiles
+    // come back as 200 + EMPTY body through it (verified: themind.space,
+    // 2/2 attempts), so an empty/absent user falls through to surface 2 —
+    // the same vendor unlocking the profile PAGE (og tags + embedded bio,
+    // verified working where the endpoint yields nothing).
     res = await curlJson("https://api.brightdata.com/request", {
       authorization: `Bearer ${mode.token}`,
       "content-type": "application/json",
-    }, ms, undefined, {
+    }, Math.min(ms, 28_000), undefined, {
       method: "POST",
       body: JSON.stringify({ zone: mode.zone, url: target, format: "raw" }),
     });
     if (res && res.status === 200 && res.json?.error) {
       throw new Error(`brightdata: ${String(res.json.error).slice(0, 100)}`);
+    }
+    if (!res?.json?.data?.user) {
+      // Surface 2 — same vendor, the profile PAGE: og tags + embedded bio.
+      // Only reachable when surface 1 returned empty/absent, and bounded so
+      // the whole lookup stays inside the job's proxy budget.
+      const pageMs = Math.max(Math.min(ms - 28_000, 15_000), 0);
+      if (pageMs >= 2000) {
+        const page = await curlText("https://api.brightdata.com/request", {
+          authorization: `Bearer ${mode.token}`,
+          "content-type": "application/json",
+        }, pageMs, {
+          method: "POST",
+          body: JSON.stringify({
+            zone: mode.zone,
+            url: `https://www.instagram.com/${username}/`,
+            format: "raw",
+          }),
+        });
+        if (page && page.status === 200 && page.body.length > 30_000) {
+          const user = igUserFromPageHtml(page.body, username);
+          if (user) {
+            console.log(`[enrich] ${username}: endpoint empty → page surface ok`);
+            return user;
+          }
+          throw new Error("page surface had no usable fields");
+        }
+        if (page && page.status !== 200) throw new Error(`brightdata page status ${page.status}`);
+        throw new Error("brightdata: both surfaces empty");
+      }
     }
   } else {
     const headers = { "x-ig-app-id": IG_APP_ID, accept: "*/*" };

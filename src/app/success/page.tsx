@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useLang } from "@/lib/lang-context";
 import { formatUsd } from "@/lib/format";
+import { tiktokTrack } from "@/lib/tiktok";
 
 // Post-payment landing. The payer logged in right before checkout, so there
 // is nothing left to do here: show the result (mock applies instantly; real
@@ -38,6 +39,7 @@ function SuccessContent() {
   useEffect(() => {
     // Mock payments apply synchronously — nothing to poll.
     if (isMock) return;
+
     // Real Dodo payment: poll until the webhook records it (bounded), then
     // head back to the board.
     let cancelled = false;
@@ -65,6 +67,14 @@ function SuccessContent() {
             if (data.applied) {
               if (!cancelled) {
                 setApplied(true);
+                // TikTok standard event: purchase conversion with value —
+                // what TikTok optimizes bids against. Fired only once the
+                // webhook confirms the payment applied.
+                void tiktokTrack("CompletePayment", {
+                  content_name: "leaderboard_bid",
+                  value: amount,
+                  currency: "USD",
+                });
                 goBoard();
               }
               return;

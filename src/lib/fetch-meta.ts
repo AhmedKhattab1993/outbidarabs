@@ -199,7 +199,7 @@ function htmlMeta(html: string, prop: string): string | null {
   return m2 ? decodeHtmlEntities(m2[1]) : null;
 }
 
-function decodeHtmlEntities(s: string): string {
+export function decodeHtmlEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => safeCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => safeCodePoint(parseInt(d, 10)))

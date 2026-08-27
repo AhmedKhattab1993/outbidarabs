@@ -19,6 +19,7 @@ function SuccessContent() {
   const params = useSearchParams();
   const [name] = useState(() => params.get("name") ?? "");
   const [amount] = useState(() => parseInt(params.get("amount") ?? "0", 10) || 0);
+  const [paid] = useState(() => parseInt(params.get("charge") ?? "0", 10) || 0);
   const [rank] = useState(() => parseInt(params.get("rank") ?? "0", 10) || 0);
   const [applied, setApplied] = useState<boolean | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,7 +86,7 @@ function SuccessContent() {
                 void tiktokTrack("CompletePayment", {
                   content_id: "leaderboard_bid",
                   content_name: "leaderboard_bid",
-                  value: amount,
+                  value: paid || amount,
                   currency: "USD",
                   event_id: ttx ?? undefined,
                 });

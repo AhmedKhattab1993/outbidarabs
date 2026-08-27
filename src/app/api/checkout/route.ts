@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
           amount: charge * 100, // cents — the difference for raises, full bid for new listings
         },
       ],
-      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}&ttx=${ttEventId}`,
+      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}&charge=${charge}&ttx=${ttEventId}`,
       // Prefill the (verified) payer email — Dodo asks only for the card.
       customer: { email: auth.email },
       metadata,

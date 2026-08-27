@@ -16,7 +16,11 @@ const usd = (n: number) => "$" + n.toLocaleString("en-US");
 
 // Layer-2 switch: real Supabase + mock payments. Explicit opt-in via
 // ALLOW_MOCK_PAYMENTS=true (local only — Vercel production never sets it).
-const MOCK_PAYMENTS = MOCK_MODE || process.env.ALLOW_MOCK_PAYMENTS === "true";
+// Production can NEVER run mock payments, regardless of env config:
+// fail-closed so a fat-fingered NEXT_PUBLIC_MOCK_MODE on prod can't create
+// fake revenue on the public board.
+const IS_PROD = process.env.VERCEL_ENV === "production";
+const MOCK_PAYMENTS = !IS_PROD && (MOCK_MODE || process.env.ALLOW_MOCK_PAYMENTS === "true");
 
 export async function POST(req: NextRequest) {
   // Paying requires a session (the inline email-code gate in the claim form
@@ -128,6 +132,13 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Dodo Payments checkout ──
+  // Test payments live on staging only: production must be on Dodo live_mode
+  // or it refuses to create checkouts at all (fail-closed against a
+  // misconfigured environment silently charging fake money).
+  if (IS_PROD && process.env.DODO_ENVIRONMENT !== "live_mode") {
+    console.error("checkout blocked: production is not in Dodo live_mode");
+    return NextResponse.json({ error: "payments_not_configured" }, { status: 500 });
+  }
   if (!process.env.DODO_API_KEY || !process.env.DODO_PRODUCT_ID) {
     return NextResponse.json({ error: "payments_not_configured" }, { status: 500 });
   }

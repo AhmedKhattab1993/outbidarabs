@@ -62,36 +62,49 @@ function clampDesc(s: string | null): string | null {
 // ── Proxy plumbing ─────────────────────────────────────────
 
 export type ProxyMode =
-  | { kind: "template"; url: string } // query-param unblocker, {url} placeholder
-  | { kind: "proxy"; host: string }   // plain proxy host[:port] (curl -x)
-  | { kind: "dev-fixture" }           // built-in deterministic fixture (no network)
-  | null;                             // unset — IG enrichment cannot run
+  | { kind: "template"; url: string }          // query-param unblocker, {url} placeholder
+  | { kind: "proxy"; host: string }            // plain proxy host[:port] (curl -x)
+  | { kind: "brightdata"; token: string; zone: string } // brightdata Unlocker REST API
+  | { kind: "dev-fixture" }                    // built-in deterministic fixture (no network)
+  | null;                                      // unset — IG enrichment cannot run
 
 /** Parse IG_PROXY_URL into a mode. Formats:
+ *   brightdata://<api-key>?zone=web_unlocker1         → Unlocker REST API (POST)
  *   https://api.scraperapi.com/?api_key=…&url={url}   → template
- *   http://user:pass@brd.superproxy.io:22235          → proxy
- *   dev-fixture://                                    → local fixture (staging/dev) */
+ *   http://user:pass@brd.superproxy.io:44445          → proxy (needs their CA cert for https!)
+ *   dev-fixture://                                     → local fixture (staging/dev) */
 export function proxyMode(): ProxyMode {
   const v = (process.env.IG_PROXY_URL ?? "").trim();
   if (!v) return null;
   if (v === "dev-fixture://") return { kind: "dev-fixture" };
+  if (v.startsWith("brightdata://")) {
+    let zone = "web_unlocker1"; // Bright Data's default zone name
+    const qi = v.indexOf("?");
+    if (qi !== -1) {
+      const q = new URLSearchParams(v.slice(qi + 1));
+      if (q.get("zone")) zone = q.get("zone") as string;
+    }
+    return { kind: "brightdata", token: v.slice("brightdata://".length, qi === -1 ? undefined : qi), zone };
+  }
   if (v.includes("{url}")) return { kind: "template", url: v };
   return { kind: "proxy", host: v };
 }
 
 /** Fetch JSON via the system curl binary. Returns {status, json} or null on
- *  transport errors / timeout / unparsable body. */
+ *  transport errors / timeout / unparsable body. Supports GET or POST. */
 async function curlJson(
   url: string,
   headers: Record<string, string>,
   ms: number,
-  proxyHost?: string
+  proxyHost?: string,
+  opts: { method?: "GET" | "POST"; body?: string } = {}
 ): Promise<{ status: number; json: any } | null> {
   if (ms < 400) return null;
   try {
     const args = [
       "-s", "--compressed", "-m", `${Math.ceil(ms / 1000)}`,
       "-w", "\n%{http_code}",
+      ...(opts.method === "POST" ? ["-X", "POST", "-d", opts.body ?? ""] : []),
       ...(proxyHost ? ["-x", proxyHost] : []),
       ...Object.entries(headers).flatMap(([k, v]) => ["-H", `${k}: ${v}`]),
       url,
@@ -143,16 +156,41 @@ export async function proxiedIgUser(username: string, ms = PROXY_BUDGET_MS): Pro
   }
   const target =
     `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
-  const headers = { "x-ig-app-id": IG_APP_ID, accept: "*/*" };
-  const res =
-    mode.kind === "template"
-      ? await curlJson(mode.url.replace("{url}", encodeURIComponent(target)), headers, ms)
-      : await curlJson(target, headers, ms, mode.host);
+  let res: { status: number; json: any } | null;
+  if (mode.kind === "brightdata") {
+    // Unlocker REST API: the raw target body comes back as the response —
+    // verified live: 200 + {data:{user:…}} on success; 200 + HTML body for a
+    // missing profile; non-200 + {error:…} on auth/quota problems.
+    res = await curlJson("https://api.brightdata.com/request", {
+      authorization: `Bearer ${mode.token}`,
+      "content-type": "application/json",
+    }, ms, undefined, {
+      method: "POST",
+      body: JSON.stringify({ zone: mode.zone, url: target, format: "raw" }),
+    });
+    if (res && res.status === 200 && res.json?.error) {
+      throw new Error(`brightdata: ${String(res.json.error).slice(0, 100)}`);
+    }
+  } else {
+    const headers = { "x-ig-app-id": IG_APP_ID, accept: "*/*" };
+    res =
+      mode.kind === "template"
+        ? await curlJson(mode.url.replace("{url}", encodeURIComponent(target)), headers, ms)
+        : await curlJson(target, headers, ms, mode.host);
+  }
   if (!res) throw new Error("proxy transport failed / timeout");
   if (res.status === 404) throw new Error("not_found");
   if (res.status !== 200) throw new Error(`proxy status ${res.status}`);
   const user = res.json?.data?.user;
-  if (!user) throw new Error(res.json?.message ? `ig: ${String(res.json.message).slice(0, 80)}` : "no user object");
+  if (!user) {
+    throw new Error(
+      res.json == null
+        ? "non-JSON body (login wall / not found)"
+        : res.json?.message
+          ? `ig: ${String(res.json.message).slice(0, 80)}`
+          : "no user object"
+    );
+  }
   return user;
 }
 

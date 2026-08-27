@@ -53,11 +53,15 @@ enrichment fails honestly (`pending → failed`) and cards show the handle.
 Formats:
 
 ```
+# Bright Data Unlocker REST API (recommended — token + zone from the dashboard;
+# the "Web Access → Web Unlocker API" zone email calls it "Bright Data API"):
+IG_PROXY_URL=brightdata://<api-key>?zone=web_unlocker1
+
 # query-param unblocker (ScraperAPI, ScrapingBee, …):
 IG_PROXY_URL=https://api.scraperapi.com/?api_key=KEY&url={url}
 
-# plain proxy with creds (Bright Data superproxy, Oxylabs, …):
-IG_PROXY_URL=http://user:pass@brd.superproxy.io:22235
+# native superproxy (needs Bright Data's CA cert for https targets):
+IG_PROXY_URL=http://user:pass@brd.superproxy.io:44445
 
 # built-in deterministic fixture — staging/dev wiring check only:
 IG_PROXY_URL=dev-fixture://
@@ -65,8 +69,10 @@ IG_PROXY_URL=dev-fixture://
 
 Any unblocker that returns the **raw body** of
 `https://www.instagram.com/api/v1/users/web_profile_info/?username=…`
-works. Dedicated "Instagram API" dataset products (different JSON shape)
-are not supported.
+works. The Bright Data Unlocker REST API (`brightdata://` mode) is verified
+live with this exact shape. Dedicated "Instagram API" dataset products
+(different JSON shape, per-record billing, requires account activation) are
+not supported.
 
 ### Choosing a provider
 

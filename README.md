@@ -262,6 +262,44 @@ reliable against local dev and any Supabase-backed deployment (layers 2–4).
 Payment-only checks (checkout amount = difference, webhook idempotency) are
 layer 3 and documented above — the script never calls Dodo.
 
+## Environments & deployments (read this before debugging "why doesn't it work here")
+
+| Environment | URL | Vercel target | Supabase |
+|---|---|---|---|
+| Production | `outbidarabs.lol` (+ vercel.app aliases) | `production` | `vyctq…` project |
+| Staging | **`staging.outbidarabs.lol`** | `preview` | `vyctq…` — same DB as production (deliberate: staging demos real data) |
+| Local dev | `localhost:3000` | — | mock store (`NEXT_PUBLIC_MOCK_MODE=true`) or any Supabase |
+
+Rules that keep this from breaking:
+
+1. **`vercel deploy` (preview) does NOT move `staging.outbidarabs.lol`.** The
+   staging domain is a manually-pinned alias. After every preview deploy:
+   ```bash
+   NEW=$(vercel deploy --yes 2>&1 | grep -oE 'https://outbidarabs-[a-z0-9]+-akteam93\.vercel\.app' | head -1)
+   vercel alias set "$NEW" staging.outbidarabs.lol
+   ```
+   Only `vercel deploy --prod` / `vercel promote` moves production.
+2. **Every preview deploy reads PREVIEW-scoped env vars**, which are separate
+   records from production ones in the dashboard. Wiring drift between scopes
+   has already bitten twice (staging pointed at an empty demo Supabase for a
+   week; a leftover `NEXT_PUBLIC_MOCK_MODE=true` made the whole meta-cache
+   layer invisible there). Keep the trio (`NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) plus
+   `NEXT_PUBLIC_MOCK_MODE=false` IDENTICAL across production and preview
+   unless you truly want staging isolated.
+3. `/api/preview` logs one line per request (`[preview] … → cache|live|miss`,
+   plus a hashed `supabase=` env fingerprint). When something looks wrong,
+   run `vercel logs <deployment-url>` and read those lines first — a
+   `mock=true` or unexpected hash explains most mysteries instantly.
+4. Preview `*.vercel.app` URLs sit behind Security Checkpoint (JS challenge):
+   browsers pass, scripts/CI get 403. The custom domains are the automation-
+   friendly surface; use them for smoke checks. Vercel Cron invocations are
+   internal and unaffected.
+5. **Vercel Cron runs on production deployments only** — until you promote,
+   `/api/cron/heal-meta` stays dormant by design. Trigger it manually against
+   staging anytime with:
+   `curl -H "Authorization: Bearer $CRON_SECRET" https://staging.outbidarabs.lol/api/cron/heal-meta`
+
 ## Going live
 
 ### 1. Supabase

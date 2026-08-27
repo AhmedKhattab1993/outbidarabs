@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse, after } from "next/server";
 import { normalizeIdentity } from "@/lib/identity";
 import { getListingByUrl, getTopListing } from "@/lib/store";
@@ -45,6 +46,11 @@ export async function GET(req: NextRequest) {
   // Vercel runtime logs without any log-drain setup.
   console.log(
     `[preview] ${identity.platform} ${identity.url} → ${metaSource} ${Date.now() - t0}ms`
+  );
+  // Environment fingerprint (hashed — no secrets in logs) to diagnose
+  // wiring drift between environments. Stable within a scope/deploy.
+  console.log(
+    `[preview] env supabase=${createHash("sha256").update(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "unset").digest("hex").slice(0, 10)} mock=${process.env.NEXT_PUBLIC_MOCK_MODE ?? "unset"}`
   );
 
   // Instagram often can't be fetched within an interactive window (per-IP

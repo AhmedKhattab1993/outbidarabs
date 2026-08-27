@@ -52,6 +52,18 @@ function SuccessContent() {
           return null;
         }
       })();
+    // TikTok dedup id: minted at checkout, echoed back through Dodo as &ttx=.
+    // Same value the webhook sends to TikTok's Events API, so one payment
+    // counts exactly once even though both sides report it.
+    const ttx =
+      params.get("ttx") ??
+      (() => {
+        try {
+          return sessionStorage.getItem("outbidarabs:ttx");
+        } catch {
+          return null;
+        }
+      })();
     if (!checkoutId) {
       goBoard();
       return;
@@ -74,6 +86,7 @@ function SuccessContent() {
                   content_name: "leaderboard_bid",
                   value: amount,
                   currency: "USD",
+                  event_id: ttx ?? undefined,
                 });
                 goBoard();
               }

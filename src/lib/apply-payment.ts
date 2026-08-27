@@ -4,6 +4,7 @@
 import { applyPaidListing, getListingByUrl } from "@/lib/store";
 import { isPlatform } from "@/lib/platforms";
 import { normalizeEmail } from "@/lib/store";
+import { sendTikTokCompletePayment, type TikTokUserContext } from "@/lib/tiktok-server";
 
 export type CheckoutMetadata = Record<string, string>;
 
@@ -66,6 +67,28 @@ export async function applyPaidCheckout(
     userId: attribution.userId ?? null,
   });
 
-  if (!result.ok) console.error("payment apply failed", orderId, result.reason);
-  return { ok: result.ok, reason: result.ok ? undefined : result.reason };
+  if (!result.ok) {
+    console.error("payment apply failed", orderId, result.reason);
+    return { ok: false, reason: result.reason };
+  }
+
+  // Server-side TikTok conversion (Events API), deduped against the browser
+  // pixel via the tt_event_id minted at checkout creation and embedded in
+  // both the checkout metadata (here) and the success-page URL (pixel side).
+  await sendTikTokCompletePayment({
+    eventId: metadata.tt_event_id,
+    value: charge || amount,
+    email: attribution.payerEmail ?? normalizeEmail(metadata.email),
+    context: parseTikTokContext(metadata),
+  });
+  return { ok: true };
+}
+
+/** Rebuild the visitor context stashed in checkout metadata (stringified). */
+function parseTikTokContext(m: CheckoutMetadata): TikTokUserContext {
+  return {
+    ip: m.tt_ip || null,
+    userAgent: m.tt_ua || null,
+    ttp: m.tt_ttp || null,
+  };
 }

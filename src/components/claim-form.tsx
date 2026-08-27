@@ -80,9 +80,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   const amountRef = useRef<HTMLInputElement>(null);
   const touched = useRef(false);
   const fetchSeq = useRef(0);
-  // Optional custom card name (for platforms whose metadata couldn't be
-  // fetched — see the preview-card input below). Reset on every new paste.
-  const [nameOverride, setNameOverride] = useState("");
   // Instagram enrichment is a background job: when the preview answers
   // fetchStatus "pending" we re-run the fetch on a backoff schedule until
   // the row lands (ok) or the session gives up (failed). The nonce just
@@ -133,7 +130,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     // Instant client-side detection for immediate feedback
     const local = normalizeIdentity(v, effectivePlatform);
     if (local.ok) {
-      setNameOverride(""); // fresh paste — the custom name starts clean
       setIgExhausted(false); // fresh paste — the poll budget resets
       setPreview((prev) =>
         prev?.kind === "ok" && prev.data.url === local.url
@@ -385,10 +381,12 @@ export function ClaimForm({ bids }: { bids: number[] }) {
           currency: "USD",
         });
         // The success page polls this id until the webhook applies the payment
-        // (mock mode skips polling).
+        // (mock mode skips polling). The TikTok dedup id lets its CompletePayment
+        // pixel event match the webhook's Events API event 1:1.
         if (data.checkoutId) {
           try {
             sessionStorage.setItem("outbidarabs:checkout", String(data.checkoutId));
+            if (data.eventId) sessionStorage.setItem("outbidarabs:ttx", String(data.eventId));
           } catch {
             /* private mode — polling simply won't know the id */
           }
@@ -452,7 +450,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         identity,
         platform: effectivePlatform,
         amount: total,
-        display_name: existing ? undefined : nameOverride.trim().slice(0, 80) || undefined,
       });
       return;
     }
@@ -461,7 +458,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         identity,
         platform: effectivePlatform,
         amount: total,
-        display_name: existing ? undefined : nameOverride.trim().slice(0, 80) || undefined,
       },
       !!existing
     );
@@ -608,30 +604,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
               >
                 {gtDescription}
               </p>
-            )}
-
-            {!existing && (
-              <div className="mt-3 px-1.5">
-                <label htmlFor="display-name" className="text-[11px] font-medium text-muted-foreground">
-                  {t.displayNameLabel}
-                </label>
-                <input
-                  id="display-name"
-                  dir="auto"
-                  maxLength={80}
-                  autoComplete="off"
-                  spellCheck={false}
-                  disabled={loading}
-                  value={nameOverride}
-                  onChange={(e) => setNameOverride(e.target.value)}
-                  placeholder={gtTitle || previewOk.displayName || ""}
-                  aria-label={t.displayNameLabel}
-                  className="mt-1 flex h-9 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
-                  {t.displayNameHint}
-                </p>
-              </div>
             )}
 
             <p className="mt-2.5 px-1.5 text-[11px] text-muted-foreground">

@@ -7,6 +7,7 @@ import { fetchListingMeta } from "@/lib/fetch-meta";
 import { claimInstagramEnrichment, runInstagramEnrichment } from "@/lib/meta-enrich";
 import { isPlatform } from "@/lib/platforms";
 import { paymentsEnvTag } from "@/lib/payments-env";
+import { clientIpFrom } from "@/lib/tiktok-server";
 import DodoPayments from "dodopayments";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
     identity?: string;
     amount?: number;
     platform?: string;
-    display_name?: string;
+    // (display_name intentionally absent — card names are platform ground
+    // truth only; any client-sent value is ignored.)
   };
   try {
     body = await req.json();
@@ -80,16 +82,9 @@ export async function POST(req: NextRequest) {
   // successfully before). For Instagram this is cache-only and NEVER waits:
   // the enrichment job runs in after() (proxy → avatar → Storage → meta_cache)
   // so the card heals even when the payer didn't wait for the preview. The
-  // ONLY client input is an optional custom display name for cards whose
-  // metadata couldn't be fetched.
-  const requestedName =
-    typeof body.display_name === "string"
-      ? body.display_name
-          .replace(/[\u0000-\u001f\u007f]/g, " ") // strip control chars
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 80)
-      : "";
+  // card name is platform ground truth only — no client-provided display
+  // name (meta.title → the handle if metadata hasn't landed yet; the heal
+  // layers backfill the real name onto the listing later).
   const meta = await fetchListingMeta(identity.platform, identity.url, identity.href);
   if (identity.platform === "instagram" && !MOCK_MODE) {
     const claim = await claimInstagramEnrichment(identity.url, identity.platform);
@@ -101,8 +96,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const displayName =
-    existing?.display_name ?? (requestedName || meta.title || identity.display_name);
+  const displayName = existing?.display_name ?? (meta.title || identity.display_name);
   const description = existing?.description ?? meta.description ?? null;
   const image = existing?.image_url ?? meta.image ?? null;
 
@@ -153,6 +147,21 @@ export async function POST(req: NextRequest) {
     user_id: auth.id,
     email: auth.email,
   };
+
+  // TikTok dedup id: shared by the webhook's Events API event (this value in
+  // metadata) and the success page's pixel event (appended to return_url as
+  // &ttx=). One minted per checkout so each purchase counts exactly once.
+  const ttEventId = crypto.randomUUID();
+  metadata.tt_event_id = ttEventId;
+
+  // Visitor context for TikTok server-side matching:
+  // the webhook fires later, unauthenticated, so the signals must ride along.
+  const ttpCookie = req.cookies.get("_ttp")?.value ?? null;
+  const ttIp = clientIpFrom(req);
+  if (ttIp) metadata.tt_ip = ttIp;
+  if (ttpCookie) metadata.tt_ttp = ttpCookie.slice(0, 100);
+  const ua = req.headers.get("user-agent");
+  if (ua) metadata.tt_ua = ua.slice(0, 200);
   if (description) metadata.description = description.slice(0, 480);
   if (image) metadata.image_url = image.slice(0, 480);
 
@@ -171,12 +180,12 @@ export async function POST(req: NextRequest) {
           amount: charge * 100, // cents — the difference for raises, full bid for new listings
         },
       ],
-      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}`,
+      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}&ttx=${ttEventId}`,
       // Prefill the (verified) payer email — Dodo asks only for the card.
       customer: { email: auth.email },
       metadata,
     });
-    return NextResponse.json({ url: session.checkout_url, checkoutId: session.session_id });
+    return NextResponse.json({ url: session.checkout_url, checkoutId: session.session_id, eventId: ttEventId });
   } catch (e) {
     console.error("dodo checkout error", e);
     return NextResponse.json({ error: "checkout_failed" }, { status: 500 });

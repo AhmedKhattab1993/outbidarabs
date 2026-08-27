@@ -27,7 +27,7 @@ job:  proxied web_profile_info (IG_PROXY_URL — the unblocking proxy)
 
 failure → finish_meta_fetch('failed') + backoff (5s, 20s, then 1h cooldown);
           client polls with backoff (~30s window), then shows the terminal
-          "couldn't fetch" note with the custom-name input.
+          "couldn't fetch" note (the username stays until the row lands).
 ```
 
 State machine on `meta_cache` (see

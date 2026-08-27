@@ -485,7 +485,7 @@ truth, no fallback stacks** (full design: `docs/meta-enrichment.md`):
    enrichment job calls `web_profile_info` through the proxy and uploads
    the avatar to the `listing-meta` Storage bucket (IG CDN URLs expire;
    Storage URLs are permanent). Unset ⇒ IG degrades honestly to the
-   handle + custom-name input — no stalls.
+   handle only — no stalls, no editable name (platform ground truth).
 2. **State machine on `meta_cache`** (`fetch_status`/`attempts`/
    `next_attempt_at`): `claim_meta_fetch()` atomically leases the job
    (75s) — concurrent requests/lambdas/cron never double-fetch. The
@@ -499,8 +499,9 @@ truth, no fallback stacks** (full design: `docs/meta-enrichment.md`):
    UTC) re-claims failed IG rows (`force`) and refetches other platforms'
    cards missing images, most-visible first. Set `CRON_SECRET` in Vercel
    env so scheduled invocations authenticate.
-5. **Manual override**: the claim form has an editable "Name shown on your
-   card" field — worst case stays cosmetic.
+5. **No manual override**: the card name is platform ground truth (the
+   editable "name on card" input was removed); an unfetched card shows the
+   handle until the heal layers land the real name.
 
 | Platform | Source | Gets |
 |---|---|---|

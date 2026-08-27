@@ -627,6 +627,8 @@ export type CachedMeta = {
   description: string | null;
   image_url: string | null;
   fetched_at: string; // ISO timestamp of when it was fetched
+  fetch_status: "pending" | "ok" | "failed";
+  next_attempt_at: string; // lease end / backoff end (ISO)
 };
 
 type MetaCacheRow = CachedMeta & { url: string; platform: Platform };
@@ -643,11 +645,20 @@ export async function getMetaCached(url: string): Promise<CachedMeta | null> {
     if (MOCK_MODE) return mockMetaCache().get(url) ?? null;
     const { data, error } = await supabaseAdmin()
       .from("meta_cache")
-      .select("title,description,image_url,fetched_at")
+      .select("title,description,image_url,fetched_at,fetch_status,next_attempt_at")
       .eq("url", url)
       .maybeSingle();
-    if (error) return null;
-    return (data as CachedMeta | null) ?? null;
+    if (error || !data) return null;
+    // Rows written before the state machine existed lack the new columns.
+    const row = data as Partial<CachedMeta>;
+    return {
+      title: row.title ?? null,
+      description: row.description ?? null,
+      image_url: row.image_url ?? null,
+      fetched_at: row.fetched_at ?? new Date(0).toISOString(),
+      fetch_status: row.fetch_status ?? (row.title || row.description || row.image_url ? "ok" : "failed"),
+      next_attempt_at: row.next_attempt_at ?? new Date(0).toISOString(),
+    };
   } catch {
     return null;
   }
@@ -660,21 +671,98 @@ export async function setMetaCached(
   meta: { title: string | null; description: string | null; image: string | null }
 ): Promise<void> {
   try {
+    const now = new Date().toISOString();
     const row = {
       url,
       platform,
       title: meta.title,
       description: meta.description,
       image_url: meta.image,
-      fetched_at: new Date().toISOString(),
+      fetched_at: now,
+      fetch_status: "ok" as const,
+      attempts: 0,
+      next_attempt_at: now,
     };
     if (MOCK_MODE) {
-      mockMetaCache().set(url, row);
+      mockMetaCache().set(url, row as MetaCacheRow);
       return;
     }
     await supabaseAdmin().from("meta_cache").upsert(row);
   } catch {
     /* cache write failures are non-fatal by design */
+  }
+}
+
+// ── Meta enrichment state machine (Pattern B — docs/meta-enrichment.md) ──
+
+export type MetaClaim =
+  | { action: "run"; attempts: number }
+  | { action: "serve"; status: "pending" | "ok" | "failed" };
+
+/** Atomically claim the enrichment job for one identity URL. Concurrent
+ *  callers (requests, lambdas, cron) never double-fetch: whoever transitions
+ *  the row to `pending` runs the job; everyone else gets `serve` + status.
+ *  Mock mode has no job machinery — always "serve failed". */
+export async function claimMetaFetch(
+  url: string,
+  platform: Platform,
+  opts: { leaseSec?: number; maxAttempts?: number; force?: boolean } = {}
+): Promise<MetaClaim> {
+  const { leaseSec = 75, maxAttempts = 3, force = false } = opts;
+  if (MOCK_MODE) return { action: "serve", status: "failed" };
+  try {
+    const { data, error } = await supabaseAdmin().rpc("claim_meta_fetch", {
+      p_url: url,
+      p_platform: platform,
+      p_lease_sec: leaseSec,
+      p_max_attempts: maxAttempts,
+      p_force: force,
+    });
+    if (error || !data) return { action: "serve", status: "failed" };
+    const r = data as { action?: string; attempts?: number; status?: string };
+    if (r.action === "run") return { action: "run", attempts: r.attempts ?? 1 };
+    return { action: "serve", status: (r.status as "pending" | "ok" | "failed") ?? "failed" };
+  } catch {
+    return { action: "serve", status: "failed" };
+  }
+}
+
+/** Terminal write of one enrichment run: success stores the data, failure
+ *  schedules the backoff. Never throws. */
+export async function finishMetaFetch(
+  url: string,
+  ok: boolean,
+  meta: { title: string | null; description: string | null; image: string | null } | null,
+  retryAfterSec = 5
+): Promise<void> {
+  if (MOCK_MODE) {
+    if (ok && meta) {
+      const prev = mockMetaCache().get(url);
+      const now = new Date().toISOString();
+      mockMetaCache().set(url, {
+        url,
+        platform: prev?.platform ?? "instagram",
+        title: meta.title,
+        description: meta.description,
+        image_url: meta.image,
+        fetched_at: now,
+        fetch_status: "ok",
+        next_attempt_at: now,
+      });
+    }
+    return;
+  }
+  try {
+    await supabaseAdmin().rpc("finish_meta_fetch", {
+      p_url: url,
+      p_ok: ok,
+      p_title: meta?.title ?? null,
+      p_description: meta?.description ?? null,
+      p_image: meta?.image ?? null,
+      p_retry_after_sec: retryAfterSec,
+    });
+  } catch {
+    /* best-effort — the lease expiry covers a lost terminal write */
   }
 }
 

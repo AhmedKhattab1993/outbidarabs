@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProfile, getSessionUser, updateProfile } from "@/lib/accounts";
 import { MOCK_MODE, supabaseAdmin } from "@/lib/store";
+import { MIME_BY_EXT, sniffImage } from "@/lib/image-sniff";
 
 export const dynamic = "force-dynamic";
 
@@ -12,30 +13,6 @@ export const dynamic = "force-dynamic";
 
 const AVATARS_BUCKET = "avatars";
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — mirrors the bucket's file_size_limit
-
-/** Sniff the real image type from magic bytes — the declared content-type
- *  (form field / bucket setting) is never trusted. Returns null for
- *  anything that isn't PNG / JPEG / WebP (SVG deliberately unsupported). */
-function sniffImage(bytes: Uint8Array): "png" | "jpeg" | "webp" | null {
-  if (bytes.length < 12) return null;
-  if (
-    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
-    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
-  ) {
-    return "png";
-  }
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
-  // RIFF<4 bytes len>WEBP
-  if (
-    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
-  ) {
-    return "webp";
-  }
-  return null;
-}
-
-const MIME_BY_EXT = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" } as const;
 
 /** Extract the storage object path from a public URL — only for URLs inside
  *  our own bucket, so a remove never deletes a foreign object. */

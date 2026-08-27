@@ -484,11 +484,12 @@ grant execute on function consume_otp_allowance(text, integer, integer, integer)
 grant execute on function refund_otp_allowance(text) to service_role;
 
 -- ───────────────────────────────────────────────────────
--- Meta cache (mirrors migrations/20250827000001_meta_cache.sql)
+-- Meta cache (mirrors migrations/20250827000001_meta_cache.sql +
+-- 20250827000002_meta_fetch_jobs.sql)
 -- ───────────────────────────────────────────────────────
--- Durable last-known-good platform metadata (src/lib/fetch-meta.ts). One row
--- per canonical identity URL; written on every successful fetch, read before
--- any upstream trip so a once-fetched profile serves instantly forever.
+-- Durable platform metadata + the enrichment state machine (Pattern B):
+-- one row per canonical identity URL; Instagram is filled by a background
+-- job through the unblocking proxy (claim_meta_fetch / finish_meta_fetch).
 create table if not exists meta_cache (
   url text primary key,
   platform text not null,
@@ -497,6 +498,112 @@ create table if not exists meta_cache (
   image_url text,
   fetched_at timestamptz not null default now()
 );
+
+alter table meta_cache add column if not exists fetch_status text not null default 'ok';
+alter table meta_cache add column if not exists attempts integer not null default 0;
+alter table meta_cache add column if not exists next_attempt_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'meta_cache_fetch_status_check') then
+    alter table meta_cache add constraint meta_cache_fetch_status_check
+      check (fetch_status in ('pending', 'ok', 'failed'));
+  end if;
+end $$;
+
+update meta_cache set fetch_status = 'failed'
+ where coalesce(title, '') = '' and coalesce(description, '') = '' and coalesce(image_url, '') = '';
+
+create or replace function claim_meta_fetch(
+  p_url text,
+  p_platform text,
+  p_lease_sec integer,
+  p_max_attempts integer,
+  p_force boolean default false
+) returns json
+language plpgsql security definer as $$
+declare
+  v_row meta_cache%ROWTYPE;
+  v_now timestamptz := now();
+begin
+  perform assert_service_role();
+  select * into v_row from meta_cache where url = p_url for update;
+
+  if v_row.url is not null then
+    if v_row.fetch_status = 'pending' and v_row.next_attempt_at > v_now then
+      return json_build_object('action', 'serve', 'status', 'pending');
+    end if;
+    if not p_force then
+      if v_row.fetch_status = 'ok' and v_row.fetched_at > v_now - interval '7 days' then
+        return json_build_object('action', 'serve', 'status', 'ok');
+      end if;
+      if v_row.fetch_status = 'failed' and v_row.next_attempt_at > v_now then
+        return json_build_object('action', 'serve', 'status', 'failed');
+      end if;
+    end if;
+    if v_row.attempts >= p_max_attempts and v_row.next_attempt_at > v_now then
+      return json_build_object('action', 'serve', 'status', v_row.fetch_status);
+    end if;
+  end if;
+
+  insert into meta_cache (url, platform, fetch_status, attempts, next_attempt_at)
+  values (p_url, p_platform, 'pending', 1, v_now + make_interval(secs => p_lease_sec))
+  on conflict (url) do update set
+    platform = excluded.platform,
+    fetch_status = 'pending',
+    attempts = case
+      when meta_cache.attempts >= p_max_attempts and meta_cache.next_attempt_at <= v_now
+        then 1
+      else meta_cache.attempts + 1
+    end,
+    next_attempt_at = excluded.next_attempt_at
+  returning * into v_row;
+
+  return json_build_object('action', 'run', 'attempts', v_row.attempts);
+end;
+$$;
+
+create or replace function finish_meta_fetch(
+  p_url text,
+  p_ok boolean,
+  p_title text,
+  p_description text,
+  p_image text,
+  p_retry_after_sec integer default 5
+) returns void
+language plpgsql security definer as $$
+begin
+  perform assert_service_role();
+  if p_ok then
+    update meta_cache set
+      title = p_title,
+      description = p_description,
+      image_url = p_image,
+      fetch_status = 'ok',
+      attempts = 0,
+      next_attempt_at = now(),
+      fetched_at = now()
+    where url = p_url;
+  else
+    update meta_cache set
+      fetch_status = 'failed',
+      next_attempt_at = now() + make_interval(secs => greatest(p_retry_after_sec, 1))
+    where url = p_url;
+  end if;
+end;
+$$;
+
+revoke execute on function claim_meta_fetch(text, text, integer, integer, boolean) from public;
+revoke execute on function finish_meta_fetch(text, boolean, text, text, text, integer) from public;
+grant execute on function claim_meta_fetch(text, text, integer, integer, boolean) to service_role;
+grant execute on function finish_meta_fetch(text, boolean, text, text, text, integer) to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('listing-meta', 'listing-meta', true, 2097152, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update
+  set public = true,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
 
 -- ───────────────────────────────────────────────────────
 -- Avatars bucket (mirrors migrations/20250826000001_avatars_bucket.sql)

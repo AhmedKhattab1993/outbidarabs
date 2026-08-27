@@ -54,8 +54,9 @@ export const dict = {
     handleMismatch: (p: Platform) =>
       `اسم المستخدم غير مطابق لـ ${platformLabel(p, "ar")} — تأكد منه أو الصق الرابط كاملاً`,
     needsUrl: (p: Platform) => `إضافة حسابات ${platformLabel(p, "ar")} تتطلب الرابط الكامل`,
-    previewSourceNote: "البيانات مسترجعة من المنصة أو من أرشيفها العام للمعاينة.",
-    fetchFailedNote: "تعذر جلب تفاصيل الحساب حالياً — سيتم عرض اسم المستخدم الأساسي، وقد تصل البيانات تلقائياً بعد لحظات إذا بقي الرابط كما هو.",
+    previewSourceNote: "البيانات مسترجعة من المنصة للمعاينة.",
+    fetchPendingNote: "جارٍ جلب تفاصيل الحساب — يستغرق ذلك عادةً ثوانٍ قليلة.",
+    fetchFailedNote: "تعذر جلب تفاصيل الحساب حالياً — سيُعرض اسم المستخدم. يمكنك كتابة الاسم في الحقل بالأسفل، وستكتمل البطاقة تلقائياً لاحقاً.",
     displayNameLabel: "الاسم المعروض على البطاقة",
     displayNameHint: "إذا لم تظهر تفاصيل الحساب، اكتب الاسم الذي تريد ظهوره — أو اتركه فارغاً لاستخدام اسم المستخدم.",
     // ── Board rows ──
@@ -241,8 +242,9 @@ export const dict = {
     handleMismatch: (p: Platform) =>
       `That handle doesn't fit ${platformLabel(p, "en")} — check it or paste the full link`,
     needsUrl: (p: Platform) => `Paste the full link for ${platformLabel(p, "en")}`,
-    previewSourceNote: "Information fetched from the platform (or its latest public archive copy) for preview.",
-    fetchFailedNote: "Couldn't fetch account data right now — showing the username. Details often arrive automatically after a few moments if you keep the link in place.",
+    previewSourceNote: "Information fetched from the platform for the preview.",
+    fetchPendingNote: "Fetching account details — this usually takes a few seconds.",
+    fetchFailedNote: "Couldn't fetch account details right now — showing the username. You can type the card name below; the card fills in automatically once details arrive.",
     displayNameLabel: "Name shown on your card",
     displayNameHint: "If account details didn't load, type the name to display — or leave empty to use the handle.",
     // ── Board rows ──

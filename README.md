@@ -476,24 +476,29 @@ each serverless instance, the table does not.
 
 ### Why Instagram needs this (reliability model)
 
-Instagram aggressively blocks/throttles server IPs: the live profile API
-returns 401 "Please wait a few minutes" lockouts, profile pages redirect to
-/accounts/login, and even archive.org throughput swings between seconds and
-minutes. Nothing client-side can beat that within an interactive request, so
-the system is built to make failures temporary instead:
+Instagram login-walls **every** server IP (live API: 401 "Please wait a few
+minutes"; profile pages: redirect to /accounts/login). No direct fetch can
+succeed, so Instagram moved to Pattern B — **one source, the DB is the
+truth, no fallback stacks** (full design: `docs/meta-enrichment.md`):
 
-1. **Durable last-good** (`meta_cache`): anything fetched successfully once
-   serves instantly for ≥7 days; stale rows still serve when live fetches
-   fail.
-2. **Background retry**: an empty Instagram preview schedules one deep
-   (30s-budget) re-fetch via `after()` once the response shipped; the claim
-   form refetches the preview twice (~8s / ~24s) to pick it up.
-3. **Checkout heal**: `/api/checkout` always consults the cache/fetcher, so
-   cards bought during a lockout get real metadata baked into their payment
-   metadata if a later attempt succeeded.
+1. **Unblocking proxy** (`IG_PROXY_URL`): the only IG data path. The
+   enrichment job calls `web_profile_info` through the proxy and uploads
+   the avatar to the `listing-meta` Storage bucket (IG CDN URLs expire;
+   Storage URLs are permanent). Unset ⇒ IG degrades honestly to the
+   handle + custom-name input — no stalls.
+2. **State machine on `meta_cache`** (`fetch_status`/`attempts`/
+   `next_attempt_at`): `claim_meta_fetch()` atomically leases the job
+   (75s) — concurrent requests/lambdas/cron never double-fetch. The
+   preview answers from the row in ~50ms and runs the job in `after()`;
+   the claim form polls until `fetchStatus` is `ok`/`failed` (~30s window,
+   backoff). Failures back off 5s → 20s → 1h cooldown, max 3 attempts per
+   session.
+3. **Checkout heal**: `/api/checkout` claims + schedules the same job, so
+   a payment itself fills/heals the card.
 4. **Daily cron**: `/api/cron/heal-meta` (Vercel Cron, `vercel.json`, 03:17
-   UTC) re-attempts board cards missing images, most-visible first. Set
-   `CRON_SECRET` in Vercel env so scheduled invocations authenticate.
+   UTC) re-claims failed IG rows (`force`) and refetches other platforms'
+   cards missing images, most-visible first. Set `CRON_SECRET` in Vercel
+   env so scheduled invocations authenticate.
 5. **Manual override**: the claim form has an editable "Name shown on your
    card" field — worst case stays cosmetic.
 
@@ -504,15 +509,21 @@ the system is built to make failures temporary instead:
 | App (Play Store) | page OG tags | icon, name, description |
 | TikTok | oEmbed + embedded `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON | nickname, 1080px avatar, bio |
 | X | profile-page OG tags → publish.x.com oEmbed | avatar, display name, bio (oEmbed: name only) |
-| Instagram | web_profile_info via curl (Node fetch is TLS-fingerprint-429'd) + page OG fallback → Wayback Machine (CDX-indexed captures, size-filtered, newest-first) — all persisted to `meta_cache` | best effort, heals over time |
+| Instagram | background job via unblocking proxy (`IG_PROXY_URL`) → `meta_cache` + `listing-meta` Storage bucket | name, bio, permanent avatar |
 | LinkedIn | page OG tags (usually login-walled) | best effort |
 
-Verify live after changes: `node --experimental-strip-types scripts/test-meta.mjs`
+Verify live after changes:
+
+```bash
+node --experimental-strip-types --import ./scripts/register-paths.mjs scripts/test-meta.mjs   # non-IG platforms
+node --experimental-strip-types --import ./scripts/register-paths.mjs scripts/test-ig-proxy.mjs # IG proxy path (local fixture)
+```
 (hit every platform once; exits non-zero if any platform returns nothing).
 
 Failed/generic fetches return `meta: null` → the card falls back to the platform
-icon + handle (view-only ground truth, exactly as the spec requires), plus the
-background-retry layers above until something sticks.
+icon + handle (view-only ground truth, exactly as the spec requires). For
+Instagram the client polls the filling row and shows a "fetching details…"
+note meanwhile; other retries are the job/backoff layers above.
 
 ## Parity with the reference
 

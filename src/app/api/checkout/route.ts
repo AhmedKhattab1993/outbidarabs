@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { normalizeIdentity, identityErrorMessages } from "@/lib/identity";
 import { applyPaidListing, getListingByUrl, MOCK_MODE } from "@/lib/store";
 import { getSessionUser } from "@/lib/accounts";
 import { MIN_BID, MAX_BID } from "@/lib/i18n";
 import { fetchListingMeta } from "@/lib/fetch-meta";
+import { claimInstagramEnrichment, runInstagramEnrichment } from "@/lib/meta-enrich";
 import { isPlatform } from "@/lib/platforms";
 import { paymentsEnvTag } from "@/lib/payments-env";
 import DodoPayments from "dodopayments";
@@ -76,9 +77,11 @@ export async function POST(req: NextRequest) {
 
   // Listing metadata: existing values where present, otherwise a server-side
   // fetch (DB-cached in meta_cache — free when the profile was ever fetched
-  // successfully before, which also heals cards first bought during an
-  // Instagram lockout). The ONLY client input is an optional custom display
-  // name for cards whose metadata couldn't be fetched.
+  // successfully before). For Instagram this is cache-only and NEVER waits:
+  // the enrichment job runs in after() (proxy → avatar → Storage → meta_cache)
+  // so the card heals even when the payer didn't wait for the preview. The
+  // ONLY client input is an optional custom display name for cards whose
+  // metadata couldn't be fetched.
   const requestedName =
     typeof body.display_name === "string"
       ? body.display_name
@@ -88,6 +91,15 @@ export async function POST(req: NextRequest) {
           .slice(0, 80)
       : "";
   const meta = await fetchListingMeta(identity.platform, identity.url, identity.href);
+  if (identity.platform === "instagram" && !MOCK_MODE) {
+    const claim = await claimInstagramEnrichment(identity.url, identity.platform);
+    if (claim.action === "run") {
+      const attempts = claim.attempts;
+      after(async () => {
+        await runInstagramEnrichment(identity.url, identity.platform, attempts);
+      });
+    }
+  }
 
   const displayName =
     existing?.display_name ?? (requestedName || meta.title || identity.display_name);

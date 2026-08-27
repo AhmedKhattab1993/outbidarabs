@@ -1,7 +1,9 @@
 // Verify platform metadata fetching end-to-end against live upstreams.
 //
-//   node --experimental-strip-types scripts/test-meta.mjs
+//   node --experimental-strip-types --import ./scripts/register-paths.mjs scripts/test-meta.mjs
 //
+// Instagram rows exercise the cache-only path (live IG data requires the
+// unblocking proxy — see scripts/test-ig-proxy.mjs and docs/meta-enrichment.md).
 // Each row prints OK/FAIL (any of title/description/image found), latency,
 // and what came back. Latency is bounded by OVERALL_BUDGET_MS (fetch-meta).
 import { fetchListingMeta } from "../src/lib/fetch-meta.ts";
@@ -19,7 +21,14 @@ const CASES = [
 ];
 
 let fails = 0;
+const igProxySet = !!(process.env.IG_PROXY_URL ?? "").trim();
 for (const [platform, url, href] of CASES) {
+  if (platform === "instagram" && !igProxySet) {
+    // Instagram is cache-only in fetch-meta (live data flows through the
+    // enrichment job + proxy — see scripts/test-ig-proxy.mjs).
+    console.log(`SKIP      instagram  ${url} (no IG_PROXY_URL — cache-only path)`);
+    continue;
+  }
   const t0 = Date.now();
   const meta = await fetchListingMeta(platform, url, href);
   const ms = Date.now() - t0;

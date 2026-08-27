@@ -24,6 +24,10 @@ type PreviewOk = {
   href: string;
   displayName: string;
   meta: { title: string | null; description: string | null; image: string | null } | null;
+  // Instagram enrichment runs as a background job (Pattern B): "pending"
+  // means a lease is live and the row will fill — keep polling. "failed"
+  // with meta == null is terminal for this session (backoff/cooldown).
+  fetchStatus?: "ok" | "pending" | "failed";
   existing: { url: string; display_name: string; bid_amount: number; platform: Platform } | null;
   topBid: number;
 };
@@ -78,11 +82,19 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   // Optional custom card name (for platforms whose metadata couldn't be
   // fetched — see the preview-card input below). Reset on every new paste.
   const [nameOverride, setNameOverride] = useState("");
-  // Instagram often needs longer than one interactive fetch; when the first
-  // answer comes back empty we re-run the preview twice (~8s and ~24s later)
-  // to pick up whatever the server's background retry persisted meanwhile.
-  const [lateRetryNonce, setLateRetryNonce] = useState(0);
-  const lateRetries = useRef(new Map<string, number>());
+  // Instagram enrichment is a background job: when the preview answers
+  // fetchStatus "pending" we re-run the fetch on a backoff schedule until
+  // the row lands (ok) or the session gives up (failed). The nonce just
+  // re-triggers the debounce effect; per-URL attempt counts live in a ref.
+  const [pollNonce, setPollNonce] = useState(0);
+  const pollAttempts = useRef(new Map<string, number>());
+  // Backoff schedule (~30s window) — mirrors the job's 75s lease loosely:
+  // most fills land within the first two polls, the tail covers slow
+  // proxy unlocks; beyond that the terminal failed note takes over.
+  const POLL_SCHEDULE = [1500, 3000, 5000, 8000, 12000];
+  // True when the poll schedule ran out while still pending — swap the
+  // "fetching…" note for the terminal fallback note at that point.
+  const [igExhausted, setIgExhausted] = useState(false);
 
   const previewOk = preview?.kind === "ok" ? preview.data : null;
 
@@ -121,6 +133,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     const local = normalizeIdentity(v, effectivePlatform);
     if (local.ok) {
       setNameOverride(""); // fresh paste — the custom name starts clean
+      setIgExhausted(false); // fresh paste — the poll budget resets
       setPreview((prev) =>
         prev?.kind === "ok" && prev.data.url === local.url
           ? prev
@@ -144,17 +157,19 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         if (seq !== fetchSeq.current) return;
         if (d.status === "ok") {
           setPreview({ kind: "ok", data: d as PreviewOk });
-          // Instagram metadata can't always be fetched within the request —
-          // the server keeps healing in the background (and persists to its
-          // cache). Two delayed refetches pick that up; never more than two
+          // Poll while the enrichment job holds the lease: each re-fetch
+          // reads the meta_cache row (and re-claims it if the last run
+          // failed inside its backoff window). Never more than the schedule
           // per pasted profile.
           const ok = d as PreviewOk;
-          if (ok.platform === "instagram" && !ok.meta && !ok.existing) {
-            const attempts = lateRetries.current.get(ok.url) ?? 0;
-            const SCHEDULE: number[] = [8000, 24000];
-            if (attempts < SCHEDULE.length) {
-              lateRetries.current.set(ok.url, attempts + 1);
-              setTimeout(() => setLateRetryNonce((n) => n + 1), SCHEDULE[attempts]);
+          const noMeta = !ok.meta && !ok.existing;
+          if (ok.platform === "instagram" && noMeta && ok.fetchStatus === "pending") {
+            const attempts = pollAttempts.current.get(ok.url) ?? 0;
+            if (attempts < POLL_SCHEDULE.length) {
+              pollAttempts.current.set(ok.url, attempts + 1);
+              setTimeout(() => setPollNonce((n) => n + 1), POLL_SCHEDULE[attempts]);
+            } else {
+              setIgExhausted(true);
             }
           }
         } else if (d.status === "ambiguous") {
@@ -170,7 +185,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     }, 450);
     return () => clearTimeout(tm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, effectivePlatform, lateRetryNonce]);
+  }, [identity, effectivePlatform, pollNonce]);
 
   // The card is ground truth from the platform (view-only), so the preview
   // only drives the suggested bid. A card already on the board defaults to
@@ -292,7 +307,22 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     return chips;
   }, [bids, existing]);
 
-  const fetchedNothing = previewOk != null && previewOk.meta == null && !previewOk.existing && !fetching;
+  // Instagram enrichment states for the preview note: still-pending →
+  // "fetching…"; terminal (failed, or polls exhausted) → the fallback note.
+  const igPending =
+    !!previewOk &&
+    previewOk.platform === "instagram" &&
+    !previewOk.existing &&
+    !previewOk.meta &&
+    previewOk.fetchStatus === "pending" &&
+    !igExhausted;
+  const fetchedNothing =
+    !!previewOk &&
+    previewOk.platform === "instagram" &&
+    !previewOk.existing &&
+    !previewOk.meta &&
+    !igPending &&
+    !fetching;
   // Ground truth shown in the card: platform meta first, then the existing
   // listing, then the raw handle — never editable here.
   const gtTitle = previewOk?.meta?.title ?? existing?.display_name ?? previewOk?.displayName ?? "";
@@ -592,6 +622,15 @@ export function ClaimForm({ bids }: { bids: number[] }) {
               {t.previewSourceNote}
             </p>
 
+            {igPending && (
+              <p className="mt-1.5 px-1.5 flex items-center gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <svg viewBox="0 0 24 24" fill="none" className="size-3 animate-spin" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                  <path d="M21 12a9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                {t.fetchPendingNote}
+              </p>
+            )}
             {fetchedNothing && (
               <p className="mt-1.5 px-1.5 text-[11px] leading-relaxed text-muted-foreground">
                 {t.fetchFailedNote}

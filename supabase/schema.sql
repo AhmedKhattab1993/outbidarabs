@@ -484,6 +484,21 @@ grant execute on function consume_otp_allowance(text, integer, integer, integer)
 grant execute on function refund_otp_allowance(text) to service_role;
 
 -- ───────────────────────────────────────────────────────
+-- Meta cache (mirrors migrations/20250827000001_meta_cache.sql)
+-- ───────────────────────────────────────────────────────
+-- Durable last-known-good platform metadata (src/lib/fetch-meta.ts). One row
+-- per canonical identity URL; written on every successful fetch, read before
+-- any upstream trip so a once-fetched profile serves instantly forever.
+create table if not exists meta_cache (
+  url text primary key,
+  platform text not null,
+  title text,
+  description text,
+  image_url text,
+  fetched_at timestamptz not null default now()
+);
+
+-- ───────────────────────────────────────────────────────
 -- Avatars bucket (mirrors migrations/20250826000001_avatars_bucket.sql)
 -- ───────────────────────────────────────────────────────
 -- Profile photos: public bucket, 2MB, PNG/JPEG/WebP only (no SVG). Writes go

@@ -428,10 +428,36 @@ ownership — anyone can pay, anyone can boost.
 ## Smart fetching (preview card)
 
 When an input is detected, `/api/preview` fetches public data for the card
-(best effort — never blocks, whole lookup capped at ~9s by a shared budget,
-10-minute success cache + 15s negative cache, single-flight de-dup of
-concurrent identical lookups; the card is view-only and shows what the
-platform returned, falling back to the handle):
+(best effort — never blocks, whole lookup capped at ~9s by a shared budget
+(~12.5s for Instagram), 10-minute success cache + 15s negative cache,
+single-flight de-dup of concurrent identical lookups; the card is view-only
+and shows what the platform returned, falling back to the handle).
+Successful fetches persist to the `meta_cache` Supabase table and are served
+from there instantly on any later paste — the in-process caches die with
+each serverless instance, the table does not.
+
+### Why Instagram needs this (reliability model)
+
+Instagram aggressively blocks/throttles server IPs: the live profile API
+returns 401 "Please wait a few minutes" lockouts, profile pages redirect to
+/accounts/login, and even archive.org throughput swings between seconds and
+minutes. Nothing client-side can beat that within an interactive request, so
+the system is built to make failures temporary instead:
+
+1. **Durable last-good** (`meta_cache`): anything fetched successfully once
+   serves instantly for ≥7 days; stale rows still serve when live fetches
+   fail.
+2. **Background retry**: an empty Instagram preview schedules one deep
+   (30s-budget) re-fetch via `after()` once the response shipped; the claim
+   form refetches the preview twice (~8s / ~24s) to pick it up.
+3. **Checkout heal**: `/api/checkout` always consults the cache/fetcher, so
+   cards bought during a lockout get real metadata baked into their payment
+   metadata if a later attempt succeeded.
+4. **Daily cron**: `/api/cron/heal-meta` (Vercel Cron, `vercel.json`, 03:17
+   UTC) re-attempts board cards missing images, most-visible first. Set
+   `CRON_SECRET` in Vercel env so scheduled invocations authenticate.
+5. **Manual override**: the claim form has an editable "Name shown on your
+   card" field — worst case stays cosmetic.
 
 | Platform | Source | Gets |
 |---|---|---|
@@ -440,14 +466,15 @@ platform returned, falling back to the handle):
 | App (Play Store) | page OG tags | icon, name, description |
 | TikTok | oEmbed + embedded `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON | nickname, 1080px avatar, bio |
 | X | profile-page OG tags → publish.x.com oEmbed | avatar, display name, bio (oEmbed: name only) |
-| Instagram | web_profile_info via curl (Node fetch is TLS-fingerprint-429'd) + OG fallback | best effort |
+| Instagram | web_profile_info via curl (Node fetch is TLS-fingerprint-429'd) + page OG fallback → Wayback Machine (CDX-indexed captures, size-filtered, newest-first) — all persisted to `meta_cache` | best effort, heals over time |
 | LinkedIn | page OG tags (usually login-walled) | best effort |
 
 Verify live after changes: `node --experimental-strip-types scripts/test-meta.mjs`
 (hit every platform once; exits non-zero if any platform returns nothing).
 
 Failed/generic fetches return `meta: null` → the card falls back to the platform
-icon + handle (view-only ground truth, exactly as the spec requires).
+icon + handle (view-only ground truth, exactly as the spec requires), plus the
+background-retry layers above until something sticks.
 
 ## Parity with the reference
 

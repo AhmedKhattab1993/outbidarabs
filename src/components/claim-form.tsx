@@ -33,7 +33,12 @@ type SubmitOutcome = "redirected" | "gate" | "error";
 
 /** A pay attempt parked behind the login gate — re-submitted verbatim after
  *  the email code verifies (no data re-entry, no extra click). */
-type PendingPayment = { identity: string; platform: Platform; amount: number };
+type PendingPayment = {
+  identity: string;
+  platform: Platform;
+  amount: number;
+  display_name?: string;
+};
 
 type PreviewState =
   | { kind: "ambiguous"; candidates: Platform[] }
@@ -70,6 +75,14 @@ export function ClaimForm({ bids }: { bids: number[] }) {
   const amountRef = useRef<HTMLInputElement>(null);
   const touched = useRef(false);
   const fetchSeq = useRef(0);
+  // Optional custom card name (for platforms whose metadata couldn't be
+  // fetched — see the preview-card input below). Reset on every new paste.
+  const [nameOverride, setNameOverride] = useState("");
+  // Instagram often needs longer than one interactive fetch; when the first
+  // answer comes back empty we re-run the preview twice (~8s and ~24s later)
+  // to pick up whatever the server's background retry persisted meanwhile.
+  const [lateRetryNonce, setLateRetryNonce] = useState(0);
+  const lateRetries = useRef(new Map<string, number>());
 
   const previewOk = preview?.kind === "ok" ? preview.data : null;
 
@@ -107,6 +120,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     // Instant client-side detection for immediate feedback
     const local = normalizeIdentity(v, effectivePlatform);
     if (local.ok) {
+      setNameOverride(""); // fresh paste — the custom name starts clean
       setPreview((prev) =>
         prev?.kind === "ok" && prev.data.url === local.url
           ? prev
@@ -130,6 +144,19 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         if (seq !== fetchSeq.current) return;
         if (d.status === "ok") {
           setPreview({ kind: "ok", data: d as PreviewOk });
+          // Instagram metadata can't always be fetched within the request —
+          // the server keeps healing in the background (and persists to its
+          // cache). Two delayed refetches pick that up; never more than two
+          // per pasted profile.
+          const ok = d as PreviewOk;
+          if (ok.platform === "instagram" && !ok.meta && !ok.existing) {
+            const attempts = lateRetries.current.get(ok.url) ?? 0;
+            const SCHEDULE: number[] = [8000, 24000];
+            if (attempts < SCHEDULE.length) {
+              lateRetries.current.set(ok.url, attempts + 1);
+              setTimeout(() => setLateRetryNonce((n) => n + 1), SCHEDULE[attempts]);
+            }
+          }
         } else if (d.status === "ambiguous") {
           setPreview({ kind: "ambiguous", candidates: d.candidates ?? [] });
         } else if (d.status === "error") {
@@ -143,7 +170,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     }, 450);
     return () => clearTimeout(tm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, effectivePlatform]);
+  }, [identity, effectivePlatform, lateRetryNonce]);
 
   // The card is ground truth from the platform (view-only), so the preview
   // only drives the suggested bid. A card already on the board defaults to
@@ -282,7 +309,12 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         const res = await fetch("/api/checkout", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ identity: p.identity, platform: p.platform, amount: p.amount }),
+          body: JSON.stringify({
+            identity: p.identity,
+            platform: p.platform,
+            amount: p.amount,
+            display_name: p.display_name,
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -370,10 +402,23 @@ export function ClaimForm({ bids }: { bids: number[] }) {
     // (their payment parks and auto-resumes on verify). Server enforces the
     // session too, so a stale client state can never pay anonymously.
     if (!user && !authLoading) {
-      setGate({ identity, platform: effectivePlatform, amount: total });
+      setGate({
+        identity,
+        platform: effectivePlatform,
+        amount: total,
+        display_name: existing ? undefined : nameOverride.trim().slice(0, 80) || undefined,
+      });
       return;
     }
-    await submitCheckout({ identity, platform: effectivePlatform, amount: total }, !!existing);
+    await submitCheckout(
+      {
+        identity,
+        platform: effectivePlatform,
+        amount: total,
+        display_name: existing ? undefined : nameOverride.trim().slice(0, 80) || undefined,
+      },
+      !!existing
+    );
   };
 
   // The CTA always quotes the delta: "boost it for $X" when raising (X =
@@ -517,6 +562,30 @@ export function ClaimForm({ bids }: { bids: number[] }) {
               >
                 {gtDescription}
               </p>
+            )}
+
+            {!existing && (
+              <div className="mt-3 px-1.5">
+                <label htmlFor="display-name" className="text-[11px] font-medium text-muted-foreground">
+                  {t.displayNameLabel}
+                </label>
+                <input
+                  id="display-name"
+                  dir="auto"
+                  maxLength={80}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={loading}
+                  value={nameOverride}
+                  onChange={(e) => setNameOverride(e.target.value)}
+                  placeholder={gtTitle || previewOk.displayName || ""}
+                  aria-label={t.displayNameLabel}
+                  className="mt-1 flex h-9 w-full rounded-xl border border-input bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
+                  {t.displayNameHint}
+                </p>
+              </div>
             )}
 
             <p className="mt-2.5 px-1.5 text-[11px] text-muted-foreground">

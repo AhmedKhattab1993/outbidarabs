@@ -3,7 +3,6 @@ import type { ActivityItem, LeaderboardPage, Listing, SiteStats, TrendingItem } 
 import { MIN_BID, MAX_BID, PER_PAGE, LAUNCH_ISO } from "@/lib/i18n";
 import { getDataFastStats } from "@/lib/datafast";
 import type { PlatformFilter, Platform } from "@/lib/platforms";
-
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -98,6 +97,7 @@ const globalStore = globalThis as unknown as {
   __mockProcessedOrders?: Set<string>;
   __mockPresence?: Map<string, number>;
   __mockPayments?: MockPayment[];
+  __mockMetaCache?: Map<string, MetaCacheRow>;
 };
 
 function mockListings(): MockListing[] {
@@ -612,6 +612,113 @@ function recordMockPayment(
 
 export function normalizeEmail(email?: string | null): string {
   return (email ?? "").trim().toLowerCase();
+}
+
+// ───────────────────────────────────────────────────────────
+// Meta cache: durable last-known-good platform metadata for preview cards.
+// One row per canonical identity URL. Instagram login-walls/throttles server
+// IPs on a whim, so anything fetched successfully even once must serve
+// instantly forever — the in-memory caches in fetch-meta die with each
+// lambda instance; this table survives them (mirrors meta_cache table).
+// ───────────────────────────────────────────────────────────
+
+export type CachedMeta = {
+  title: string | null;
+  description: string | null;
+  image_url: string | null;
+  fetched_at: string; // ISO timestamp of when it was fetched
+};
+
+type MetaCacheRow = CachedMeta & { url: string; platform: Platform };
+
+function mockMetaCache(): Map<string, MetaCacheRow> {
+  if (!globalStore.__mockMetaCache) globalStore.__mockMetaCache = new Map();
+  return globalStore.__mockMetaCache;
+}
+
+/** Last metadata successfully fetched for this identity, or null. Never
+ *  throws — a cache read failure degrades to a cold fetch. */
+export async function getMetaCached(url: string): Promise<CachedMeta | null> {
+  try {
+    if (MOCK_MODE) return mockMetaCache().get(url) ?? null;
+    const { data, error } = await supabaseAdmin()
+      .from("meta_cache")
+      .select("title,description,image_url,fetched_at")
+      .eq("url", url)
+      .maybeSingle();
+    if (error) return null;
+    return (data as CachedMeta | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a successful fetch. Best-effort — callers never block on failure. */
+export async function setMetaCached(
+  platform: Platform,
+  url: string,
+  meta: { title: string | null; description: string | null; image: string | null }
+): Promise<void> {
+  try {
+    const row = {
+      url,
+      platform,
+      title: meta.title,
+      description: meta.description,
+      image_url: meta.image,
+      fetched_at: new Date().toISOString(),
+    };
+    if (MOCK_MODE) {
+      mockMetaCache().set(url, row);
+      return;
+    }
+    await supabaseAdmin().from("meta_cache").upsert(row);
+  } catch {
+    /* cache write failures are non-fatal by design */
+  }
+}
+
+/** Board cards missing a profile image, most visible first. The daily heal
+ *  job re-runs the fetcher over these and backfills whatever it finds. */
+export async function listingsMissingImage(limit = 25): Promise<Listing[]> {
+  if (MOCK_MODE) {
+    return mockListings()
+      .filter((l) => !l.image_url)
+      .sort((a, b) => b.bid_amount - a.bid_amount)
+      .slice(0, limit);
+  }
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("listings")
+      .select("*")
+      .or("image_url.is.null,image_url.eq.''" )
+      .order("bid_amount", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as Listing[];
+  } catch {
+    return [];
+  }
+}
+
+/** Patch display fields of one listing after a successful heal-fetch. Only
+ *  provided keys are written. Best-effort; failures are logged upstream. */
+export async function updateListingMeta(
+  id: string,
+  patch: { display_name?: string; description?: string; image_url?: string }
+): Promise<boolean> {
+  try {
+    if (MOCK_MODE) {
+      const l = mockListings().find((m) => m.id === id);
+      if (!l) return false;
+      Object.assign(l, patch);
+      return true;
+    }
+    const { error } = await supabaseAdmin().from("listings").update(patch).eq("id", id);
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 function rankOf(target: Listing, all: Listing[]): number {

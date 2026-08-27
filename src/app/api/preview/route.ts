@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { normalizeIdentity } from "@/lib/identity";
 import { getListingByUrl, getTopListing } from "@/lib/store";
 import { fetchListingMeta } from "@/lib/fetch-meta";
@@ -33,6 +33,25 @@ export async function GET(req: NextRequest) {
 
   // Smart fetch (best effort, cached server-side). Never blocks long.
   const meta = await fetchListingMeta(identity.platform, identity.url, identity.href);
+
+  // Instagram often can't be fetched within an interactive window (per-IP
+  // lockouts, archive.org congestion). When that happens, retry ONCE in the
+  // background with a deep budget: the result persists into the Supabase
+  // meta_cache table, so the next paste of this profile — or its checkout —
+  // serves full data instantly even though this response shows just the
+  // handle. `after()` keeps work alive past the response on Vercel.
+  if (!(meta.title || meta.description || meta.image) && identity.platform === "instagram") {
+    after(async () => {
+      try {
+        await fetchListingMeta(identity.platform, identity.url, identity.href, {
+          budgetMs: 30_000,
+          force: true,
+        });
+      } catch {
+        /* best-effort heal — nothing depends on it */
+      }
+    });
+  }
 
   return NextResponse.json({
     status: "ok",

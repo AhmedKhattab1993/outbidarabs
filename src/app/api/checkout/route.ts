@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     identity?: string;
     amount?: number;
     platform?: string;
+    display_name?: string;
   };
   try {
     body = await req.json();
@@ -73,14 +74,23 @@ export async function POST(req: NextRequest) {
   // Charge only the difference when raising an existing listing.
   const charge = existing ? amount - existing.bid_amount : amount;
 
-  // Listing metadata: existing values → server-side fetch (cached, already
-  // sanitized to display/bio limits in fetch-meta) → raw handle. The preview
-  // card is view-only ground truth, so nothing comes from the client.
-  const meta = existing
-    ? { title: null, description: null, image: null }
-    : await fetchListingMeta(identity.platform, identity.url, identity.href);
+  // Listing metadata: existing values where present, otherwise a server-side
+  // fetch (DB-cached in meta_cache — free when the profile was ever fetched
+  // successfully before, which also heals cards first bought during an
+  // Instagram lockout). The ONLY client input is an optional custom display
+  // name for cards whose metadata couldn't be fetched.
+  const requestedName =
+    typeof body.display_name === "string"
+      ? body.display_name
+          .replace(/[\u0000-\u001f\u007f]/g, " ") // strip control chars
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80)
+      : "";
+  const meta = await fetchListingMeta(identity.platform, identity.url, identity.href);
 
-  const displayName = existing?.display_name ?? meta.title ?? identity.display_name;
+  const displayName =
+    existing?.display_name ?? (requestedName || meta.title || identity.display_name);
   const description = existing?.description ?? meta.description ?? null;
   const image = existing?.image_url ?? meta.image ?? null;
 

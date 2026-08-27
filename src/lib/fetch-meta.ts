@@ -10,9 +10,15 @@
 //             oEmbed no longer returns thumbnail_url and pages lost og: tags)
 //  - instagram: web_profile_info endpoint (via curl — Node's fetch TLS
 //             fingerprint gets 429'd on datacenter IPs) + page OG fallback
+//             + Wayback Machine fallback (IG now login-walls every server
+//             IP; archived copies carry bio/avatar via embedded JSON, and
+//             avatars replay through web.archive.org after CDN expiry).
+//             Successful results persist to the Supabase meta_cache table,
+//             which also serves as durable last-known-good on failures.
 //  - linkedin: page OG tags (usually login-walled → clean fallback)
 
 import type { Platform } from "@/lib/platforms";
+import { getMetaCached, setMetaCached } from "@/lib/store";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -29,6 +35,9 @@ export type ListingMeta = {
 // preview endpoint always answers within ~this time (worst case), and almost
 // always within ~2s when platforms are healthy.
 const OVERALL_BUDGET_MS = 9000;
+// Instagram gets more headroom: its only reliable server-side data source
+// (Wayback Machine) can be slow, and the route declares maxDuration = 15.
+const IG_BUDGET_MS = 12500;
 // Cap for any single HTTP request / curl invocation inside that budget.
 const REQ_TIMEOUT_MS = 4000;
 const FETCH_RETRIES = 1;      // one retry on 429/5xx/network errors
@@ -38,6 +47,17 @@ const CACHE_TTL_MS = 10 * 60_000;
 // upstream platform while the user edits the same handle — but short enough
 // that an immediate re-paste can retry after a transient failure.
 const NEG_CACHE_TTL_MS = 15_000;
+// A Supabase-cached result newer than this is served without any upstream
+// trip. Older rows are re-fetched live (best effort); on failure the stale
+// row still serves — old data beats no data for a preview card.
+const META_STALE_MS = 7 * 24 * 60 * 60_000;
+// Wayback captures whose WARC record (compressed size, bytes) sits below
+// this are login-wall shells / redirect junk, not real profile pages.
+// Observed shells ≈8–15KB; real profiles ≥31KB even for the biggest
+// accounts (small accounts 90KB+, celebrity pages 130–190KB). Filtering by
+// the index's own `length` column skips dead captures for free instead of
+// burning a ~4–5s download slot on each.
+const WAYBACK_MIN_CAPTURE_BYTES = 34_000;
 
 // Browser-like UA for page scraping: WAF rules commonly 403 short bot-style
 // UAs, while og-tag scraping with a browser UA succeeds broadly.
@@ -98,17 +118,20 @@ function rememberGood(key: string, value: ListingMeta): void {
  * Budget shared by every attempt of one platform lookup. take(cap) returns
  * how long the caller may spend right now (0 → nothing left, skip attempt).
  */
-function makeBudget(totalMs: number) {
-  const end = Date.now() + totalMs;
+type Budget = { take(cap: number): number };
+function makeBudget(totalMs: number): Budget {
+  return budgetUntil(Date.now() + totalMs);
+}
+/** Deadline-anchored budget: whatever time remains until endAt. */
+function budgetUntil(endAt: number): Budget {
   return {
     /** Returns milliseconds to spend, or 0 when the budget is exhausted. */
     take(cap: number): number {
-      const ms = Math.min(cap, end - Date.now());
+      const ms = Math.min(cap, endAt - Date.now());
       return ms >= 400 ? Math.round(ms) : 0;
     },
   };
 }
-type Budget = ReturnType<typeof makeBudget>;
 
 async function timedFetch(
   url: string,
@@ -185,6 +208,33 @@ async function curlJson(
     } catch {
       return null; // non-JSON body
     }
+  } catch {
+    return null; // curl missing / timeout
+  }
+}
+
+/** Fetch text via the system curl binary, surfacing the HTTP status and
+ *  final (post-redirect) URL. Single attempt, no retry — the caller owns
+ *  the budget slice. Returns null on transport errors / missing curl. */
+async function curlText(
+  url: string,
+  headers: Record<string, string>,
+  ms: number // pre-sliced budget
+): Promise<{ status: number; body: string; url: string } | null> {
+  if (ms < 400) return null;
+  try {
+    const args = [
+      "-sL", "--compressed", "-m", `${Math.ceil(ms / 1000)}`,
+      "-w", "\n%{http_code}\n%{url_effective}",
+      ...Object.entries(headers).flatMap(([k, v]) => ["-H", `${k}: ${v}`]),
+      url,
+    ];
+    const { stdout } = await execFileP("curl", args, { timeout: ms + 500, maxBuffer: 5 * 1024 * 1024 });
+    const lines = stdout.split("\n");
+    const finalUrl = (lines.pop() ?? "").trim();
+    const status = parseInt(lines.pop() ?? "", 10);
+    if (!Number.isFinite(status)) return null;
+    return { status, body: lines.join("\n"), url: finalUrl || url };
   } catch {
     return null; // curl missing / timeout
   }
@@ -289,7 +339,10 @@ function htmlMeta(html: string, prop: string): string | null {
 
 function decodeHtmlEntities(s: string): string {
   return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => safeCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => safeCodePoint(parseInt(d, 10)))
     .replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, "\u00a0")
     .replace(/&#0?39;/g, "'")
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&")
@@ -297,6 +350,21 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&#x27;/gi, "'")
     .trim();
+}
+
+function safeCodePoint(n: number): string {
+  return Number.isInteger(n) && n > 0 && n <= 0x10ffff
+    ? String.fromCodePoint(n)
+    : "";
+}
+
+/** Decode a raw JSON string-literal fragment (contents between the quotes). */
+function jsonStr(raw: string): string | null {
+  try {
+    return JSON.parse(`"${raw}"`) as string;
+  } catch {
+    return null;
+  }
 }
 
 function resolveUrl(image: string | null, base: string): string | null {
@@ -352,20 +420,70 @@ function igSaysLimited(j: any): boolean {
 
 async function fetchInstagram(identityUrl: string, _href: string, b: Budget): Promise<ListingMeta> {
   const username = handleOf(identityUrl);
+  // Stage 3 starts immediately — the archive.org replay is the slowest hop
+  // and the only reliable one from server IPs — but its result is used only
+  // if the fresher stages come up empty (preference: live API > page OG
+  // tags > archived copy). Never awaited when an earlier stage succeeds.
+  const wayback = waybackInstagram(username, b);
+  // Stage 1 — the web app's own profile endpoint (public app id). Node's
+  // fetch gets 429'd by TLS fingerprint on datacenter IPs — race curl
+  // against plain fetch across both API hosts; whichever answers first
+  // wins. Bounded so it can't eat the shared deadline on its own.
+  const user = await instagramLiveApi(username, makeBudget(3500));
+  if (user) {
+    return {
+      title: clampTitle(user.full_name || null),
+      description: clampDesc(user.biography ?? null),
+      image: user.profile_pic_url ?? null,
+    };
+  }
+  // Stage 2 — profile page OG tags (usually login-walled from server IPs,
+  // but cheap to try when not cooling down).
+  if (!instagramCoolingDown()) {
+    const base = `https://www.instagram.com/${username}/`;
+    const html = await fetchHtml(base, undefined, makeBudget(2000));
+    if (html) {
+      const title = htmlMeta(html, "og:title");
+      // Login redirect = page-level gate. Short cooldown so the next pastes
+      // skip straight to the archive fallback instead of re-hitting the wall.
+      if (!title && /accounts\/(login|challenge)/.test(html.slice(0, 5000))) {
+        markInstagramLocked(45_000);
+      } else {
+        const desc = htmlMeta(html, "og:description");
+        const image = resolveUrl(htmlMeta(html, "og:image"), base);
+        const meta: ListingMeta = {
+          title: title && !/^instagram(\.com)?$/i.test(title) ? clampTitle(title) : null,
+          description:
+            desc && !/^instagram(\.com)?$/i.test(desc) && !/sign ?up to see|log ?in to see/i.test(desc)
+              ? clampDesc(desc)
+              : null,
+          image: image && !/rsrc\.php/.test(image) ? image : null,
+        };
+        if (hasData(meta)) return meta;
+      }
+    }
+  }
+  // Stage 3 — Wayback Machine: Instagram now login-walls every server IP,
+  // but archived copies of the profile page carry og: tags (avatar) plus
+  // the full embedded profile JSON (biography, full_name). Data can be
+  // months stale — acceptable for a preview card. Independent of IG
+  // lockouts, so it runs even while the cooldown above is active.
+  return wayback;
+}
+
+/** Live web_profile_info race. All upstream trips go through the shared
+ *  pacer (≥1.5s apart) so bursts don't trip Instagram's per-IP lockout on
+ *  the datacenter egress; a lockout payload aborts remaining tries
+ *  immediately. Each task draws its budget slice only when it actually
+ *  runs (pacer slots can arrive seconds after construction). Returns the
+ *  API `user` object or null. */
+async function instagramLiveApi(username: string, b: Budget): Promise<any | null> {
   // Already locked out recently — don't touch the network at all.
-  if (instagramCoolingDown()) return { title: null, description: null, image: null };
-  // The web app's own profile endpoint (public app id). Node's fetch gets
-  // 429'd by TLS fingerprint on datacenter IPs — race curl against plain
-  // fetch across both API hosts; whichever answers first wins, and the
-  // budget caps the whole stage so failures stay fast.
+  if (instagramCoolingDown()) return null;
   const apiOf = (host: string) =>
     `https://${host}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
   const igHeaders = { "x-ig-app-id": "936619743392459", accept: "*/*" };
-  // All upstream trips go through the shared pacer (≥1.5s apart) so bursts
-  // don't trip Instagram's per-IP lockout on the datacenter egress; a
-  // lockout payload aborts remaining tries immediately.
-  let sawLimit = false;
-  const apiTask = (raw: () => Promise<any | null>): (() => Promise<any | null>) =>
+  const apiTask = (run: (b: Budget) => Promise<any | null>): (() => Promise<any | null>) =>
     // Cooldown check sits OUTSIDE the pacer so fully-skipped tries never
     // touch the chain; the inner check (before any I/O) aborts an already-
     // queued try without costing the followers their 1.5s slot.
@@ -374,55 +492,155 @@ async function fetchInstagram(identityUrl: string, _href: string, b: Budget): Pr
         ? Promise.resolve(null)
         : paceInstagramUpstream(async () => {
             if (instagramCoolingDown()) return PACE_SKIP;
-            const r = await raw();
+            const r = await run(b);
             if ((r && igSaysLimited(r.json)) || isTransient(r?.status ?? 0)) {
-              sawLimit = true;
               markInstagramLocked();
               return PACE_SKIP;
             }
-            const user = r?.json?.data?.user;
-            return user ? r : null;
+            const u = r?.json?.data?.user;
+            return u ? r : null;
           }).then((v) => (v === PACE_SKIP ? null : v));
   const j = await raceSuccess([
-    apiTask(() => curlJson(apiOf("i.instagram.com"), igHeaders, b.take(4000))),
-    apiTask(() => curlJson(apiOf("www.instagram.com"), igHeaders, b.take(3000))),
-    apiTask(() => fetchJson(apiOf("i.instagram.com"), igHeaders, b)),
-    apiTask(() => fetchJson(apiOf("www.instagram.com"), igHeaders, b)),
+    apiTask((bb) => curlJson(apiOf("i.instagram.com"), igHeaders, bb.take(4000))),
+    apiTask((bb) => curlJson(apiOf("www.instagram.com"), igHeaders, bb.take(3000))),
+    apiTask((bb) => fetchJson(apiOf("i.instagram.com"), igHeaders, bb)),
+    apiTask((bb) => fetchJson(apiOf("www.instagram.com"), igHeaders, bb)),
   ]);
-  const user = j?.data?.user;
-  if (user) {
-    return {
-      title: clampTitle(user.full_name || null),
-      description: clampDesc(user.biography ?? null),
-      image: user.profile_pic_url ?? null,
-    };
+  return j?.data?.user ?? null;
+}
+
+/** Instagram profile data from the Wayback Machine. Archived copies of
+ *  the profile page carry og: tags (avatar) plus the full embedded profile
+ *  JSON (biography, full_name). Fast path: timestampless replay redirects
+ *  straight to the nearest capture — one round trip, no index lookup. If
+ *  that capture is junk or stalls, the CDX index enumerates alternates and
+ *  (length-filtered) captures are walked newest-first, two at a time. */
+async function waybackInstagram(username: string, b: Budget): Promise<ListingMeta> {
+  const tried = new Set<string>();
+  // Both archive.org hops START TOGETHER and are CONSUMED TOGETHER: archive
+  // throughput swings wildly (even a small CDX JSON or a ~1MB profile page
+  // can take anywhere from 1s to 10s depending on the minute), and awaiting
+  // the timestampless replay serially strands the capture walk behind a
+  // dead 503 login-shell capture. curl (not Node fetch) for page bodies:
+  // undici's transfer stalls against archive.org from some egress IPs.
+  const wbHeaders = { "user-agent": UA_BROWSER, accept: "text/html,*/*" };
+  const replayP = curlText(
+    `https://web.archive.org/web/${new Date().getFullYear() + 1}id_/https://www.instagram.com/${username}/`,
+    wbHeaders,
+    b.take(3000)
+  );
+  // The CDX index gets its own capped slice via a deadline-anchored sub-
+  // budget, and BOTH transports race: archive.org regularly stalls mid-
+  // transfer on undici while curl sails through (and vice versa). Whichever
+  // yields valid JSON first wins.
+  const cdxUrl =
+    `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(`instagram.com/${username}`)}` +
+    `&output=json&filter=statuscode:200&collapse=digest&limit=-16`;
+  const cdxFetchMs = Math.max(b.take(5000), 0);
+  const cdxCurlMs = Math.max(b.take(5000), 0);
+  const cdxP = raceSuccess([
+    () => (cdxFetchMs >= 400 ? fetchJson(cdxUrl, undefined, budgetUntil(Date.now() + cdxFetchMs)) : Promise.resolve(null)),
+    () => curlJson(cdxUrl, { "user-agent": UA_BROWSER, accept: "application/json" }, cdxCurlMs),
+  ]);
+  const [at, cdx0] = await Promise.all([replayP.catch(() => null), cdxP]);
+  // Patient callers (background heal, cron) get a second CDX attempt with a
+  // fat slice when the first one starved: archive.org regularly serves even
+  // its small JSON in ~7-9s during congested minutes — slower than any sane
+  // interactive slice, but fine once the response already shipped.
+  let cdx = cdx0;
+  if (!Array.isArray(cdx)) {
+    const retryMs = Math.max(b.take(10_000), 0);
+    if (retryMs >= 4000) {
+      cdx = await raceSuccess([
+        () => fetchJson(cdxUrl, undefined, budgetUntil(Date.now() + retryMs)),
+        () => curlJson(cdxUrl, { "user-agent": UA_BROWSER, accept: "application/json" }, retryMs),
+      ]);
+    }
   }
-  // Locked out: the OG fallback would land on the login wall too — bail out
-  // now so failed pastes answer fast until the lockout clears.
-  if (sawLimit || instagramCoolingDown()) {
-    return { title: null, description: null, image: null };
+  const ts = at?.url.match(/\/web\/(\d{4,14})id_\//)?.[1] ?? null;
+  if (at && at.status === 200 && at.body && ts && at.body.length > WAYBACK_MIN_CAPTURE_BYTES) {
+    tried.add(ts);
+    const meta = parseArchivedInstagram(at.body.slice(0, 2_000_000), username, ts);
+    if (hasData(meta)) return meta;
   }
-  // Fallback: profile page OG tags (login-walled pages serve generic
-  // branding → sanitized below into a clean no-data result).
-  const base = `https://www.instagram.com/${username}/`;
-  const html = await fetchHtml(base, undefined, b);
-  if (!html) return { title: null, description: null, image: null };
-  // Login redirect = page-level gate. Short cooldown so the next pastes skip
-  // straight to fallback instead of re-hitting the wall.
-  const title = htmlMeta(html, "og:title");
-  if (!title && /accounts\/(login|challenge)/.test(html.slice(0, 5000))) {
-    markInstagramLocked(45_000);
-    return { title: null, description: null, image: null };
+  // CDX rows ascend oldest→newest — REVERSE so the walk tries the freshest
+  // capture first, and pre-filter by WARC record size: tiny rows are
+  // login-wall shells (downloading one wastes several costly seconds of
+  // shared budget on a page that can never parse). Larger junk shells still
+  // exist, so keep parsing each until one yields data.
+  const stamps = Array.isArray(cdx)
+    ? cdx
+        .slice(1)
+        .filter(
+          (r) =>
+            Array.isArray(r) && /^\d+$/.test(String(r[1] ?? "")) && Number(r[6] ?? 0) >= WAYBACK_MIN_CAPTURE_BYTES
+        )
+        .map((r) => String(r[1]))
+        .reverse()
+    : [];
+  // Walk in pairs with budgets sliced UPFRONT (two parallel downloads can
+  // never overdraw the shared deadline), preferring the newer capture.
+  for (let i = 0; i < stamps.length; i += 2) {
+    if (b.take(1500) === 0) break; // nothing left worth starting a multi-second hop
+    const pair = stamps.slice(i, i + 2).filter((t) => !tried.has(t));
+    pair.forEach((t) => tried.add(t));
+    if (!pair.length) continue;
+    const slices = pair.map(() => b.take(6000)).filter((ms) => ms >= 1000);
+    const bodies = await Promise.all(
+      pair.slice(0, slices.length).map(
+        (t, k) =>
+          curlText(`https://web.archive.org/web/${t}id_/https://www.instagram.com/${username}/`, wbHeaders, slices[k])
+      )
+    );
+    for (let k = 0; k < bodies.length; k++) {
+      const r = bodies[k];
+      if (!r || r.status !== 200 || !r.body || r.body.length < WAYBACK_MIN_CAPTURE_BYTES) continue;
+      const meta = parseArchivedInstagram(r.body.slice(0, 2_000_000), username, pair[k]);
+      if (hasData(meta)) return meta;
+    }
   }
-  const desc = htmlMeta(html, "og:description");
-  const image = resolveUrl(htmlMeta(html, "og:image"), base);
+  return { title: null, description: null, image: null };
+}
+
+/** Extract listing meta from an archived instagram.com/{user}/ snapshot.
+ *  Exported for offline unit checks (scripts / node --test). */
+export function parseArchivedInstagram(html: string, username: string, ts: string): ListingMeta {
+  // Embedded profile JSON: suggested/related accounts are embedded on the
+  // same page, so attribute each biography to its nearest "username" and
+  // keep the one belonging to this user. Layout within the owner node:
+  // …"biography":"…","full_name":"…","is_verified":…
+  const allBios = [...html.matchAll(/"biography":"((?:[^"\\]|\\.)*)"/g)];
+  const own =
+    allBios.find((m) => {
+      const before = html.lastIndexOf('"username":"', m.index);
+      const after = html.indexOf('"username":"', m.index);
+      const at =
+        before >= 0 && (after < 0 || m.index - before < after - m.index) ? before : after;
+      if (at < 0) return false;
+      return html.slice(at + 12, html.indexOf('"', at + 12)) === username;
+    }) ?? (allBios.length === 1 ? allBios[0] : undefined);
+  const bio = own ? jsonStr(own[1]) : null;
+  const fullName = own
+    ? jsonStr(
+        html
+          .slice(own.index + own[0].length, own.index + own[0].length + 500)
+          .match(/^,"full_name":"((?:[^"\\]|\\.)*)"/)?.[1] ?? ""
+      )
+    : null;
+  // og:title: "Display Name (@handle) • Instagram photos and videos"
+  const ogTitle = htmlMeta(html, "og:title");
+  const ogName = ogTitle?.match(/^(.*?)\s*\(@/)?.[1].trim() ?? null;
+  // og:image: original CDN URL whose signature has long expired — replay
+  // it through the archive so the avatar keeps resolving for <img> tags.
+  const ogImage = htmlMeta(html, "og:image");
+  const image =
+    ogImage && !/rsrc\.php/.test(ogImage)
+      ? `https://web.archive.org/web/${ts}im_/${ogImage}`
+      : null;
   return {
-    title: title && !/^instagram(\.com)?$/i.test(title) ? clampTitle(title) : null,
-    description:
-      desc && !/^instagram(\.com)?$/i.test(desc) && !/sign ?up to see|log ?in to see/i.test(desc)
-        ? clampDesc(desc)
-        : null,
-    image: image && !/rsrc\.php/.test(image) ? image : null,
+    title: clampTitle(fullName || ogName || null),
+    description: clampDesc(bio),
+    image,
   };
 }
 
@@ -582,14 +800,46 @@ async function fetchApp(_identityUrl: string, href: string, b: Budget): Promise<
  *  - last-known-good: a failed live fetch still serves stale metadata
  *    rather than degrading the card to the bare platform icon
  */
+export type FetchMetaOptions = {
+  /** Override the per-lookup wall-clock ceiling. The defaults keep an
+   *  interactive paste fast; background callers (heal cron, post-response
+   *  retry) pass a larger value to ride out slow archive.org minutes. */
+  budgetMs?: number;
+  /** Skip the negative-cache short-circuit so a background retry actually
+   *  goes upstream even though an interactive attempt just failed. */
+  force?: boolean;
+};
+
 export async function fetchListingMeta(
   platform: Platform,
   identityUrl: string,
-  href: string
+  href: string,
+  opts: FetchMetaOptions = {}
 ): Promise<ListingMeta> {
   const key = `${platform}:${identityUrl}`;
   const hit = cacheGet(key);
-  if (hit !== undefined) return hit ?? { title: null, description: null, image: null };
+  if (hit !== undefined && !opts.force) {
+    return hit ?? { title: null, description: null, image: null };
+  }
+
+  // Durable cache (Supabase) — survives lambda restarts. A fresh-enough row
+  // answers the lookup with zero upstream trips; a stale row is still kept
+  // in hand for when the live fetch fails (Instagram lockouts).
+  const durable = await getMetaCached(identityUrl).catch(() => null);
+  if (
+    durable &&
+    (durable.title || durable.description || durable.image_url) &&
+    Date.now() - new Date(durable.fetched_at).getTime() < META_STALE_MS
+  ) {
+    const served: ListingMeta = {
+      title: durable.title,
+      description: durable.description,
+      image: durable.image_url,
+    };
+    cacheSet(key, served);
+    rememberGood(key, served);
+    return served;
+  }
 
   const s = state();
   const inflight = s.inflight ?? (s.inflight = new Map());
@@ -597,7 +847,8 @@ export async function fetchListingMeta(
   if (running) return running;
 
   const task = (async (): Promise<ListingMeta> => {
-    const b = makeBudget(OVERALL_BUDGET_MS);
+    const budgetMs = opts.budgetMs ?? (platform === "instagram" ? IG_BUDGET_MS : OVERALL_BUDGET_MS);
+    const b = makeBudget(budgetMs);
     let meta: ListingMeta = { title: null, description: null, image: null };
     try {
       switch (platform) {
@@ -627,12 +878,23 @@ export async function fetchListingMeta(
     if (hasData(meta)) {
       cacheSet(key, meta);
       rememberGood(key, meta);
+      void setMetaCached(platform, identityUrl, meta); // best-effort persist
       return meta;
     }
-    // Live fetch found nothing — fall back to last known good data, else
-    // negative-cache briefly so re-pastes don't hammer a struggling platform.
+    // Live fetch found nothing — fall back to last known good data (memory
+    // first, then the durable table), else negative-cache briefly so
+    // re-pastes don't hammer a struggling platform.
     const good = state().lastGood?.get(key);
     if (good) return good;
+    if (durable && (durable.title || durable.description || durable.image_url)) {
+      const stale: ListingMeta = {
+        title: durable.title,
+        description: durable.description,
+        image: durable.image_url,
+      };
+      rememberGood(key, stale);
+      return stale; // stale but real — beats an empty card
+    }
     cacheSet(key, null);
     return meta;
   })();

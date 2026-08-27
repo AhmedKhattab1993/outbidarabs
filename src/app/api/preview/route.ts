@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     searchParams.get("identity") ?? "",
     isPlatform(searchParams.get("platform")) ? (searchParams.get("platform") as never) : undefined
   );
+  const t0 = Date.now();
+  let metaSource: "cache" | "live" | "miss" | null = null;
 
   if (!identity.ok) {
     if (identity.reason === "ambiguous") {
@@ -33,6 +35,17 @@ export async function GET(req: NextRequest) {
 
   // Smart fetch (best effort, cached server-side). Never blocks long.
   const meta = await fetchListingMeta(identity.platform, identity.url, identity.href);
+  metaSource =
+    meta.title || meta.description || meta.image
+      ? Date.now() - t0 > 2500 // anything this slow can only be live upstreams
+        ? "live"
+        : "cache"
+      : "miss";
+  // One line per request — makes cache hits / lockout patterns legible in
+  // Vercel runtime logs without any log-drain setup.
+  console.log(
+    `[preview] ${identity.platform} ${identity.url} → ${metaSource} ${Date.now() - t0}ms`
+  );
 
   // Instagram often can't be fetched within an interactive window (per-IP
   // lockouts, archive.org congestion). When that happens, retry ONCE in the

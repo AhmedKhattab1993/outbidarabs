@@ -264,41 +264,114 @@ layer 3 and documented above — the script never calls Dodo.
 
 ## Environments & deployments (read this before debugging "why doesn't it work here")
 
-| Environment | URL | Vercel target | Supabase |
-|---|---|---|---|
-| Production | `outbidarabs.lol` (+ vercel.app aliases) | `production` | `vyctq…` project |
-| Staging | **`staging.outbidarabs.lol`** | `preview` | `vyctq…` — same DB as production (deliberate: staging demos real data) |
-| Local dev | `localhost:3000` | — | mock store (`NEXT_PUBLIC_MOCK_MODE=true`) or any Supabase |
+Two fully isolated stacks. Staging exists so tests can never touch real
+money or the public board. **Never "simplify" by pointing one environment
+at the other's backend** — on 2026-08-27 a copy-pasted Supabase URL made
+staging payments mutate the live board for hours (required a full board
+wipe; see `backups/` for the snapshot convention that made it reversible).
 
-Rules that keep this from breaking:
+### The map
 
-1. **`vercel deploy` (preview) does NOT move `staging.outbidarabs.lol`.** The
-   staging domain is a manually-pinned alias. After every preview deploy:
+| | Production | Staging |
+|---|---|---|
+| URL | `outbidarabs.lol` | `staging.outbidarabs.lol` |
+| Vercel target | `production` (`vercel deploy --prod`) | `preview` (`vercel deploy` + manual alias) |
+| Supabase project | `vyctqxemuhfpuhrsstzg` — outbidarabs-**prod** | `bqbcwnsuoutzatfemafm` — outbidarabs-**staging** |
+| Dodo Payments | `live_mode` keys — **real money, real cards only** | `test_mode` keys — test card `4242 4242 4242 4242` only |
+| TikTok Pixel | `NEXT_PUBLIC_TIKTOK_PIXEL_ID` — same pixel on both, by design | same |
+| Local dev | `localhost:3000` — mock store (`NEXT_PUBLIC_MOCK_MODE=true`) or any Supabase | |
+
+DataFast analytics currently shares one site id across both domains
+(staging visits mix into the traffic numbers — cosmetic only).
+
+Both Supabase projects live in the same account (list them:
+`GET https://api.supabase.com/v1/projects` with `SUPABASE_ACCESS_TOKEN`).
+`supabase/schema.sql` is idempotent — run it on **both** projects whenever
+it changes (SQL editor, `npm run db:schema`, or the Management API
+`POST /v1/projects/<ref>/database/query`). Old databases may reject a
+`create or replace view` whose columns changed — drop the view first
+(`drop view if exists supporters_view cascade;`) and re-run.
+
+### Fail-closed guards (in code, not convention)
+
+1. **Mock payments are unreachable on production.** `MOCK_PAYMENTS` is
+   force-disabled when `VERCEL_ENV=production`, whatever the env vars say
+   (`api/checkout/route.ts`).
+2. **Production refuses non-live Dodo.** Checkout creation returns
+   `payments_not_configured` unless `DODO_ENVIRONMENT=live_mode` on
+   production — a sandbox misconfiguration fails loudly instead of handing
+   out checkout URLs that charge fake money (`api/checkout/route.ts`).
+3. **Webhook env-tag guard.** Every checkout stores `metadata.env`
+   (`paymentsEnvTag()` → prod/staging/local); `api/webhooks/dodo` applies
+   only events tagged for its own environment. Dodo test mode fans every
+   event out to all registered endpoints — this guard is what keeps that
+   fan-out from double-applying across environments.
+4. **TikTok dedup.** `InitiateCheckout` / `CompletePayment` fire from the
+   browser pixel, and the webhook sends a server-side `CompletePayment`
+   via the Events API — both share a `tt_event_id` minted at checkout so
+   TikTok counts each purchase once.
+
+### Test-payment policy
+
+- **Staging:** `4242 4242 4242 4242`, any future expiry, any CVC. Real
+  cards DECLINE there (sandbox). The checkout URL reads `test.checkout.…`.
+- **Production:** real cards only; the test card is declined by Dodo live.
+  The checkout URL reads `checkout.dodopayments.com` — the absence of the
+  `test.` prefix is the fastest "which mode am I in" check.
+- The success page polls `/api/payment-status` until the webhook applies
+  the payment; the TikTok `CompletePayment` pixel event fires only on that
+  confirmation, so abandoned/stuck checkouts never fake revenue.
+
+### Verifying isolation (run after ANY env-var change)
+
+```bash
+# Which database does a deployment actually target? The Supabase ref is
+# inlined into the client bundle — grep the served JS:
+NEW=<deployment-url>
+curl -s "https://$NEW/" -o /tmp/i.html
+grep -oE '/_next/static/[^"]*\.js' /tmp/i.html | sort -u | while read -r p; do
+  curl -s "https://$NEW$p"; done | grep -oE \
+  'bqbcwnsuoutzatfemafm|vyctqxemuhfpuhrsstzg' | sort -u
+# a staging deploy must print bqbcwn… ; production must print vyctqx… .
+# (Vercel may challenge scripted requests — retry from a browser if so.)
+```
+
+Also: `outbidarabs.lol/api/stats` and `staging.outbidarabs.lol/api/stats`
+must show **different** `listingCount`s (staging keeps its 23-row seed
+board). Pixel check per domain, in the browser console:
+`window.ttq._i` prints the initialized pixel id.
+
+### Operational rules that keep this from breaking
+
+1. **`vercel deploy` (preview) does NOT move `staging.outbidarabs.lol`.**
+   The staging domain is a manually-pinned alias. After every preview deploy:
    ```bash
    NEW=$(vercel deploy --yes 2>&1 | grep -oE 'https://outbidarabs-[a-z0-9]+-akteam93\.vercel\.app' | head -1)
    vercel alias set "$NEW" staging.outbidarabs.lol
    ```
    Only `vercel deploy --prod` / `vercel promote` moves production.
-2. **Every preview deploy reads PREVIEW-scoped env vars**, which are separate
-   records from production ones in the dashboard. Wiring drift between scopes
-   has already bitten twice (staging pointed at an empty demo Supabase for a
-   week; a leftover `NEXT_PUBLIC_MOCK_MODE=true` made the whole meta-cache
-   layer invisible there). Keep the trio (`NEXT_PUBLIC_SUPABASE_URL`,
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) plus
-   `NEXT_PUBLIC_MOCK_MODE=false` IDENTICAL across production and preview
-   unless you truly want staging isolated.
+2. **Preview and Production env vars are separate records.** When touching
+   the Preview scope, copy values from the *staging* project — never from
+   the Production scope. This exact slip (2026-08-27) pointed staging at
+   the prod database; it took a full board wipe to undo. Treat the Supabase
+   trio (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`) as the danger zone — unlike most vars they
+   must **differ** between scopes.
 3. `/api/preview` logs one line per request (`[preview] … → cache|live|miss`,
    plus a hashed `supabase=` env fingerprint). When something looks wrong,
    run `vercel logs <deployment-url>` and read those lines first — a
    `mock=true` or unexpected hash explains most mysteries instantly.
 4. Preview `*.vercel.app` URLs sit behind Security Checkpoint (JS challenge):
-   browsers pass, scripts/CI get 403. The custom domains are the automation-
-   friendly surface; use them for smoke checks. Vercel Cron invocations are
+   browsers pass, scripts/CI get 403, and burst activity from one IP can
+   temporarily challenge even custom domains. Vercel Cron invocations are
    internal and unaffected.
-5. **Vercel Cron runs on production deployments only** — until you promote,
-   `/api/cron/heal-meta` stays dormant by design. Trigger it manually against
-   staging anytime with:
+5. **Vercel Cron runs on production deployments only** — trigger manually
+   against staging anytime:
    `curl -H "Authorization: Bearer $CRON_SECRET" https://staging.outbidarabs.lol/api/cron/heal-meta`
+6. **Backups:** destructive database work gets a pre-flight snapshot to
+   `backups/prod-backup-<timestamp>.json` (gitignored) — every row of
+   listings / payments / activity / processed_checkouts / clicks /
+   meta_cache / site_stats / profiles via the service key.
 
 ## Going live
 

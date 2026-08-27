@@ -83,6 +83,7 @@ function SuccessContent() {
                 // what TikTok optimizes bids against. Fired only once the
                 // webhook confirms the payment applied.
                 void tiktokTrack("CompletePayment", {
+                  content_id: "leaderboard_bid",
                   content_name: "leaderboard_bid",
                   value: amount,
                   currency: "USD",

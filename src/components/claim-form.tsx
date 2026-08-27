@@ -389,6 +389,7 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         // redirect starts (fire-and-forget here loses events to navigation).
         // The ~400ms grace lets the SDK flush before leaving for Dodo.
         await tiktokTrack("InitiateCheckout", {
+          content_id: "leaderboard_bid",
           content_name: raise ? "raise_bid" : "new_bid",
           value: p.amount,
           currency: "USD",

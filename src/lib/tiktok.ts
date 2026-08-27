@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 // TikTok Pixel: loads once per browser session when NEXT_PUBLIC_TIKTOK_PIXEL_ID
 // is set. The shim below mirrors the official base code — events fired before
@@ -95,15 +96,41 @@ export async function tiktokTrack(
 }
 
 /**
+ * Advanced matching: hash the signed-in user's email (normalized, SHA-256
+ * hex — TikTok's expected form) and attach it to the pixel so every event
+ * from this browser attributes to a real person, not just a cookie.
+ * Idempotent per session; no-op when unconfigured.
+ */
+export async function tiktokIdentifyEmail(email: string): Promise<void> {
+  await getTikTok();
+  try {
+    const normalized = email.trim().toLowerCase();
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+    const hashed = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    window.ttq?.identify?.({ email: hashed });
+  } catch (e) {
+    console.error("tiktok identify failed", e);
+  }
+}
+
+/**
  * Mount once in the root layout. Loads the pixel and fires Pageview on every
  * App Router navigation (soft route changes don't trigger it automatically).
  */
 export function TikTokPixel() {
   const pathname = usePathname();
+  const { user } = useAuth();
   useEffect(() => {
     void getTikTok().then(() => {
       window.ttq?.page?.();
     });
   }, [pathname]);
+  // Advanced matching: signed-in users attribute every event to a real
+  // person (hashed email), not just a cookie — idempotent per email.
+  useEffect(() => {
+    if (user?.email) void tiktokIdentifyEmail(user.email);
+  }, [user?.email]);
   return null;
 }

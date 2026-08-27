@@ -64,7 +64,10 @@ export default async function RootLayout({
         <TikTokPixel />
         <ThemeProvider>
           <LangProvider initialLang={lang}>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+            <TikTokPixel />
+            {children}
+          </AuthProvider>
           </LangProvider>
         </ThemeProvider>
       </body>

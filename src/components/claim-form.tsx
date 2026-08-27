@@ -374,12 +374,6 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         // One funnel event per real checkout (never on the pre-login 401
         // attempt) — fired before the navigation below.
         void trackEvent("checkout_started", { amount: p.amount, raise });
-        // TikTok standard event: lets TikTok optimize toward checkout starts.
-        void tiktokTrack("InitiateCheckout", {
-          content_name: raise ? "raise_bid" : "new_bid",
-          value: p.amount,
-          currency: "USD",
-        });
         // The success page polls this id until the webhook applies the payment
         // (mock mode skips polling). The TikTok dedup id lets its CompletePayment
         // pixel event match the webhook's Events API event 1:1.
@@ -391,7 +385,15 @@ export function ClaimForm({ bids }: { bids: number[] }) {
             /* private mode — polling simply won't know the id */
           }
         }
-        window.location.href = data.url;
+        // TikTok standard event, awaited so its beacon is queued before the
+        // redirect starts (fire-and-forget here loses events to navigation).
+        // The ~400ms grace lets the SDK flush before leaving for Dodo.
+        await tiktokTrack("InitiateCheckout", {
+          content_name: raise ? "raise_bid" : "new_bid",
+          value: p.amount,
+          currency: "USD",
+        }).catch(() => {});
+        setTimeout(() => { window.location.href = data.url; }, 400);
         return "redirected";
       } catch {
         setError(identityErrorMessages("invalid", lang));

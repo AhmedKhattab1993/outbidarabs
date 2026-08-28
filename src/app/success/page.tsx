@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { useLang } from "@/lib/lang-context";
 import { formatUsd } from "@/lib/format";
 import { tiktokTrack } from "@/lib/tiktok";
+import { metaTrack } from "@/lib/meta";
 
 // Post-payment landing. The payer logged in right before checkout, so there
 // is nothing left to do here: show the result (mock applies instantly; real
@@ -65,6 +66,18 @@ function SuccessContent() {
           return null;
         }
       })();
+    // Meta dedup id: same UUID minted at checkout, echoed back as &fbb=.
+    // Same value the webhook sends to the Conversions API, so one payment
+    // counts exactly once on Meta too.
+    const fbb =
+      params.get("fbb") ??
+      (() => {
+        try {
+          return sessionStorage.getItem("outbidarabs:fbb");
+        } catch {
+          return null;
+        }
+      })();
     if (!checkoutId) {
       goBoard();
       return;
@@ -90,6 +103,18 @@ function SuccessContent() {
                   currency: "USD",
                   event_id: ttx ?? undefined,
                 });
+                // Meta standard event: Purchase with value — eventID in the
+                // third arg matches the webhook's Conversions API event 1:1.
+                void metaTrack(
+                  "Purchase",
+                  {
+                    content_ids: ["leaderboard_bid"],
+                    content_type: "product",
+                    value: paid || amount,
+                    currency: "USD",
+                  },
+                  fbb,
+                );
                 goBoard();
               }
               return;

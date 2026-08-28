@@ -5,6 +5,7 @@ import { applyPaidListing, getListingByUrl } from "@/lib/store";
 import { isPlatform } from "@/lib/platforms";
 import { normalizeEmail } from "@/lib/store";
 import { sendTikTokCompletePayment, type TikTokUserContext } from "@/lib/tiktok-server";
+import { sendMetaPurchase } from "@/lib/meta-server";
 
 export type CheckoutMetadata = Record<string, string>;
 
@@ -80,6 +81,17 @@ export async function applyPaidCheckout(
     value: charge || amount,
     email: attribution.payerEmail ?? normalizeEmail(metadata.email),
     context: parseTikTokContext(metadata),
+  });
+  // Server-side Meta conversion — same shared event id, same dedup contract.
+  await sendMetaPurchase({
+    eventId: metadata.tt_event_id,
+    value: charge || amount,
+    email: attribution.payerEmail ?? normalizeEmail(metadata.email),
+    context: {
+      ip: metadata.tt_ip || null,
+      userAgent: metadata.tt_ua || null,
+      fbp: metadata.fb_fbp || null,
+    },
   });
   return { ok: true };
 }

@@ -8,6 +8,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import { getDict, type Lang } from "@/lib/i18n";
 import { Analytics } from "@/lib/analytics";
 import { TikTokPixel } from "@/lib/tiktok";
+import { MetaPixel } from "@/lib/meta";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -65,6 +66,7 @@ export default async function RootLayout({
           <LangProvider initialLang={lang}>
             <AuthProvider>
               <TikTokPixel />
+              <MetaPixel />
               {children}
             </AuthProvider>
           </LangProvider>

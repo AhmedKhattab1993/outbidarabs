@@ -173,6 +173,9 @@ export async function POST(req: NextRequest) {
   if (ttpCookie) metadata.tt_ttp = ttpCookie.slice(0, 100);
   const ua = req.headers.get("user-agent");
   if (ua) metadata.tt_ua = ua.slice(0, 200);
+  // Meta Conversions API matching: the _fbp cookie set by the browser pixel.
+  const fbpCookie = req.cookies.get("_fbp")?.value ?? null;
+  if (fbpCookie) metadata.fb_fbp = fbpCookie.slice(0, 100);
   if (description) metadata.description = description.slice(0, 480);
   if (image) metadata.image_url = image.slice(0, 480);
 
@@ -191,7 +194,7 @@ export async function POST(req: NextRequest) {
           amount: charge * 100, // cents — the difference for raises, full bid for new listings
         },
       ],
-      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}&charge=${charge}&ttx=${ttEventId}`,
+      return_url: `${siteUrl}/success?name=${encodeURIComponent(displayName)}&amount=${amount}&charge=${charge}&ttx=${ttEventId}&fbb=${ttEventId}`,
       // Prefill the (verified) payer email — Dodo asks only for the card.
       customer: { email: auth.email },
       metadata,

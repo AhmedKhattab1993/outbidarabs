@@ -7,6 +7,7 @@ import { identityErrorMessages, normalizeIdentity } from "@/lib/identity";
 import { HANDLE_CANDIDATES, detectPlatform, platformLabel, type Platform } from "@/lib/platforms";
 import { trackEvent } from "@/lib/analytics";
 import { tiktokTrack } from "@/lib/tiktok";
+import { metaTrack } from "@/lib/meta";
 import { useAuth } from "@/lib/auth-context";
 import { EmailCodeForm } from "@/components/email-code-form";
 import { PlatformIcon, PlatformBadge } from "@/components/platform-icon";
@@ -380,7 +381,10 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         if (data.checkoutId) {
           try {
             sessionStorage.setItem("outbidarabs:checkout", String(data.checkoutId));
-            if (data.eventId) sessionStorage.setItem("outbidarabs:ttx", String(data.eventId));
+            if (data.eventId) {
+              sessionStorage.setItem("outbidarabs:ttx", String(data.eventId));
+              sessionStorage.setItem("outbidarabs:fbb", String(data.eventId));
+            }
           } catch {
             /* private mode — polling simply won't know the id */
           }
@@ -391,6 +395,13 @@ export function ClaimForm({ bids }: { bids: number[] }) {
         await tiktokTrack("InitiateCheckout", {
           content_id: "leaderboard_bid",
           content_name: raise ? "raise_bid" : "new_bid",
+          value: p.amount,
+          currency: "USD",
+        }).catch(() => {});
+        // Meta standard event — same funnel step, no dedup id needed here.
+        await metaTrack("InitiateCheckout", {
+          content_ids: ["leaderboard_bid"],
+          content_type: "product",
           value: p.amount,
           currency: "USD",
         }).catch(() => {});

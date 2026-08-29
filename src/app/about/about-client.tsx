@@ -5,7 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { OnlinePill } from "@/components/online-pill";
 import { useLang } from "@/lib/lang-context";
-import { formatUsd, durationSince } from "@/lib/format";
+import { formatUsd } from "@/lib/format";
 import { MAX_BID } from "@/lib/i18n";
 import type { SiteStats } from "@/lib/types";
 
@@ -124,10 +124,7 @@ export function AboutClient({ stats }: { stats: SiteStats }) {
                 {t.backCreatorCta}
               </Link>
             </div>
-            <p className="text-sm">
-              {t.sinceFromLaunch(durationSince(stats.launchedAt, t))}{" "}
-              · {t.inspiredBy}
-            </p>
+            <p className="text-sm">{t.inspiredBy}</p>
           </div>
         </div>
         <SiteFooter />

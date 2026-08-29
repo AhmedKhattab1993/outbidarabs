@@ -218,7 +218,7 @@ export function HomeClient({
               )}
             </div>
           </div>
-          <EarningsCard revenue={stats.totalRevenue} launchedAt={stats.launchedAt} />
+          <EarningsCard revenue={stats.totalRevenue} />
         </div>
         <SiteFooter />
       </div>

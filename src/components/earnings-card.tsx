@@ -1,15 +1,10 @@
 "use client";
 
 import { useLang } from "@/lib/lang-context";
-import { durationSince } from "@/lib/format";
 
-/**
- * The viral earnings card from the reference:
- * "This simple side project made  $118,411  since its launch 56 hours ago"
- */
-export function EarningsCard({ revenue, launchedAt }: { revenue: number; launchedAt: string }) {
+/** The viral earnings card from the reference: "This simple side project made $118,411" */
+export function EarningsCard({ revenue }: { revenue: number }) {
   const { t } = useLang();
-  const sinceLine = t.sinceFromLaunch(durationSince(launchedAt, t));
   return (
     <section className="mt-14 text-center">
       <p className="text-sm font-medium text-muted-foreground text-pretty">
@@ -22,7 +17,6 @@ export function EarningsCard({ revenue, launchedAt }: { revenue: number; launche
           {revenue.toLocaleString("en-US")}
         </p>
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">{sinceLine}</p>
     </section>
   );
 }
